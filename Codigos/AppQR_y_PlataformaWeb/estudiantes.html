@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lista de Estudiantes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Firebase compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <style>
+    :root { --azul:#2563eb; --azul-osc:#1e40af; --bg:#f1f5f9; }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;padding:20px;
+    display: none;}
+    h1{margin:0;color:#1e3a8a}
+    .top-bar{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap}
+    .brand{display:flex;align-items:center;gap:10px}
+    .brand img{height:36px;width:36px;object-fit:contain}
+    .btn{background:var(--azul);color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
+    .btn:hover{background:var(--azul-osc)}
+    .card{background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:14px}
+    .card h2{margin:0 0 8px;color:#1e3a8a;font-size:18px}
+    .row{display:grid;grid-template-columns:1.2fr 0.6fr 0.8fr 0.8fr 0.8fr;gap:10px}
+    label{font-size:13px;color:#334155}
+    input,select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
+    .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+    .kpi{background:#f8fafc;border:1px solid #e5e7eb;padding:8px 10px;border-radius:10px;font-size:13px}
+    .chip{display:inline-block;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1e3a8a;font-size:12px;border:1px solid #bfdbfe;margin:2px 4px 0 0}
+    .muted{color:#64748b;font-size:13px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #e5e7eb;font-size:14px}
+    th{background:var(--azul);color:#fff;position:sticky;top:0;z-index:1}
+    tr.clickable{cursor:pointer}
+    tr.clickable:hover{background:#f8fafc}
+    @media (max-width:1100px){ .row{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <!-- ENCABEZADO -->
+  <div class="top-bar">
+    <div class="brand">
+      <img src="logounl.png" alt="Logo" onerror="this.style.display='none'">
+      <h1>👥 Lista de Estudiantes</h1>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <a class="btn" href="portal.html">← Inicio</a>
+      <button id="btnLogout" class="btn" type="button" style="background-color: #dc2626;" onclick="cerrarSesion()">Cerar Sesión </button>
+    </div>
+    
+  </div>
+
+  <!-- FILTROS -->
+  <div class="card">
+    <h2>Buscar y filtrar</h2>
+    <div class="row" style="margin-top:6px">
+      <div>
+        <label>Buscar (nombre o cédula)</label>
+        <input id="txtBuscar" type="text" placeholder="Escribe para filtrar…">
+      </div>
+      <div>
+        <label>Filtrar por ciclo</label>
+        <select id="selCiclo"><option value="">Todos</option></select>
+      </div>
+      <div>
+        <label>Filtrar por asignatura</label>
+        <select id="selAsignatura"><option value="">Todas</option></select>
+      </div>
+      <div>
+        <label>Filtrar por docente</label>
+        <select id="selDocente"><option value="">Todos</option></select>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="btnLimpiar" class="btn" type="button">Limpiar filtros</button>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi">Total estudiantes: <b id="kpiTotal">0</b></div>
+      <div class="kpi">Mostrando: <b id="kpiMostrando">0</b></div>
+      <div class="kpi">Vista: <b id="kpiVista">Inicio</b></div>
+    </div>
+  </div>
+
+  <!-- RESULTADOS -->
+  <div class="card" style="max-height:70vh;overflow:auto">
+    <h2>Resultados</h2>
+    <div id="contenedorTabla"></div>
+  </div>
+
+<script>
+    // ===== Firebase =====
+    const firebaseConfig = {
+        apiKey:"AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+        authDomain:"escaner-qr-d7d65.firebaseapp.com",
+        projectId:"escaner-qr-d7d65",
+        storageBucket:"escaner-qr-d7d65.appspot.com",
+        messagingSenderId:"982923527298",
+        appId:"1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth(); // Referencia al módulo de Auth
+
+    // ===== Refs UI =====
+    const txtBuscar = document.getElementById('txtBuscar');
+    const selCiclo = document.getElementById('selCiclo');
+    const selAsignatura = document.getElementById('selAsignatura');
+    const selDocente = document.getElementById('selDocente');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+    const contenedorTabla = document.getElementById('contenedorTabla');
+    const kpiTotal = document.getElementById('kpiTotal');
+    const kpiMostrando = document.getElementById('kpiMostrando');
+    const kpiVista = document.getElementById('kpiVista');
+
+    // ===== Estado =====
+    let estudiantes = []; // docs de estudiantes (con asignaciones[])
+    let clases = [];      // clases definidas {ciclo, asignatura, profesor|docente}
+    let searchTimer = null;
+
+    // ===== Utils =====
+    const norm = s => (s||"").toString().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,"");
+    const byNombre = (a,b)=> (a.nombre||'').localeCompare(b.nombre||'');
+    const isCedula = q => /^\d{7,}$/.test(q);
+
+    function normDocenteName(s){
+        return norm(s)
+            .replace(/\b(ing|ing\.|lic|lic\.|msc|msc\.|m\.?sc\.?|dr|dr\.)\b/g,'')
+            .replace(/[^a-z0-9\s]/g,'')
+            .replace(/\s+/g,' ')
+            .trim();
+    }
+    const sameDocente = (a,b)=> normDocenteName(a) === normDocenteName(b);
+
+    function paintSelect(sel, arr, labelFn){
+        const prev = sel.value;
+        sel.innerHTML = '';
+        arr.forEach(v => sel.appendChild(new Option(labelFn(v), v)));
+        if (arr.includes(prev)) sel.value = prev;
+        else sel.value = '';
+    }
+
+    // ===== Universo de filtros dependientes (desde clases definidas) =====
+    function computeAllowedOptions(selectedCiclo, selectedAsig, selectedDoc){
+        const rows = clases.filter(r=>{
+            const c = (r.ciclo??'').toString();
+            const a = r.asignatura || '';
+            const d = r.profesor || r.docente || '';
+            const okC = !selectedCiclo || c === selectedCiclo;
+            const okA = !selectedAsig || norm(a) === norm(selectedAsig);
+            const okD = !selectedDoc || sameDocente(d, selectedDoc);
+            return okC && okA && okD;
+        });
+
+        const ciclos = new Set(), asigs = new Set(), docs = new Set();
+        rows.forEach(r=>{
+            const c = (r.ciclo??'').toString();
+            const a = r.asignatura || '';
+            const d = r.profesor || r.docente || '';
+            if (c) ciclos.add(c);
+            if (a) asigs.add(a);
+            if (d) docs.add(d);
+        });
+
+        if (clases.length===0 || (ciclos.size===0 && asigs.size===0 && docs.size===0)){
+            const c2 = new Set(), a2 = new Set(), d2 = new Set();
+            estudiantes.forEach(e=>{
+                (e.asignaciones||[]).forEach(m=>{
+                    const c = (m.ciclo??'').toString();
+                    const a = m.asignatura || '';
+                    const d = m.docente || m.profesor || '';
+                    if (c) c2.add(c);
+                    if (a) a2.add(a);
+                    if (d) d2.add(d);
+                });
+            });
+            return {
+                ciclos: Array.from(c2).sort((x,y)=>Number(x)-Number(y)),
+                asignaturas: Array.from(a2).sort((x,y)=>x.localeCompare(y)),
+                docentes: Array.from(d2).sort((x,y)=>x.localeCompare(y)),
+            };
+        }
+
+        return {
+            ciclos: Array.from(ciclos).sort((x,y)=>Number(x)-Number(y)),
+            asignaturas: Array.from(asigs).sort((x,y)=>x.localeCompare(y)),
+            docentes: Array.from(docs).sort((x,y)=>x.localeCompare(y)),
+        };
+    }
+
+    function updateFilterOptionsFromSelections(){
+        const cSel = selCiclo.value;
+        const aSel = selAsignatura.value;
+        const dSel = selDocente.value;
+
+        const allowed = computeAllowedOptions(cSel, aSel, dSel);
+
+        const ciclosArr = [''].concat(allowed.ciclos ?? []);
+        paintSelect(selCiclo, ciclosArr.slice(0), v=> v?`Ciclo ${v}`:'Todos');
+
+        const asigsArr = [''].concat(allowed.asignaturas ?? []);
+        paintSelect(selAsignatura, asigsArr.slice(0), v=> v||'Todas');
+
+        const docsArr = [''].concat(allowed.docentes ?? []);
+        paintSelect(selDocente, docsArr.slice(0), v=> v||'Todos');
+    }
+
+    // ===== Vista actual / Render =====
+    function vistaActual(){
+        const q = norm(txtBuscar.value.trim());
+        const hasClassFilter = !!(selCiclo.value || selAsignatura.value || selDocente.value);
+        const cedulaExact = isCedula(q) && estudiantes.some(e => norm(e.cedula||'')===q);
+        if (cedulaExact) return 'cedula';
+        if (hasClassFilter) return 'clase';
+        return 'inicio';
+    }
+
+    function render(){
+        const q = norm(txtBuscar.value.trim());
+        const fCiclo = selCiclo.value;
+        const fAsig = selAsignatura.value;
+        const fDoc  = selDocente.value;
+        const mode = vistaActual();
+
+        kpiVista.textContent =
+            mode==='inicio' ? 'Inicio' :
+            mode==='cedula' ? 'Detalle por cédula' : 'Por clase';
+
+        contenedorTabla.innerHTML = '';
+        let mostrados = 0;
+
+        if (mode === 'inicio' || mode === 'cedula'){
+            const base = (mode==='cedula')
+                ? estudiantes.filter(e => norm(e.cedula||'')===q)
+                : estudiantes.filter(e => !q || norm(e.nombre||'').includes(q) || norm(e.cedula||'').includes(q));
+
+            const tbl = document.createElement('table');
+            tbl.innerHTML = `
+                <thead>
+                    <tr>
+                        <th style="width:70px">#</th>
+                        <th style="min-width:120px">Cédula</th>
+                        <th style="min-width:200px">Nombre</th>
+                        <th style="min-width:420px">Asignaciones (Ciclo – Asignatura – Docente)</th>
+                    </tr>
+                </thead>`;
+            const tbody = document.createElement('tbody');
+
+            base.forEach((e,idx)=>{
+                const chips = (e.asignaciones||[]).map(m=>{
+                    const c = (m.ciclo??'—').toString();
+                    const a = m.asignatura || '—';
+                    const d = m.docente || m.profesor || '—';
+                    return `<span class="chip">C${c} · ${a} · ${d}</span>`;
+                }).join(' ') || '<span class="chip">Sin asignaciones</span>';
+
+                const tr = document.createElement('tr');
+                tr.className = 'clickable';
+                tr.innerHTML = `
+                    <td>${idx+1}</td>
+                    <td>${e.cedula || ''}</td>
+                    <td>${e.nombre || ''}</td>
+                    <td>${chips}</td>`;
+                tr.addEventListener('click', ()=> location.href=` perfil-estudiante.html?cedula=${encodeURIComponent(e.cedula||'')}`);
+                tbody.appendChild(tr);
+            });
+
+            tbl.appendChild(tbody);
+            contenedorTabla.appendChild(tbl);
+            mostrados = base.length;
+
+        } else {
+            // Por clase: filas por asignación que cumpla filtros dependientes
+            const filas = [];
+            estudiantes.forEach(e=>{
+                (e.asignaciones||[]).forEach(m=>{
+                    const ciclo = (m.ciclo??'').toString();
+                    const asig = m.asignatura || '';
+                    const doc  = m.docente || m.profesor || '';
+                    const textOK = !q || norm(e.nombre||'').includes(q) || norm(e.cedula||'').includes(q);
+                    const okC = !fCiclo || ciclo===fCiclo;
+                    const okA = !fAsig || norm(asig)===norm(fAsig);
+                    const okD = !fDoc  || sameDocente(doc, fDoc);
+                    if (textOK && okC && okA && okD){
+                        filas.push({
+                            cedula: e.cedula || '',
+                            nombre: e.nombre || '',
+                            ciclo, asignatura: asig, docente: doc,
+                            id_registro: Number.isFinite(e.id_registro)? e.id_registro : null
+                        });
+                    }
+                });
+            });
+
+            filas.sort((x,y)=>{
+                const nx = x.id_registro ?? 1e9, ny = y.id_registro ?? 1e9;
+                return (nx-ny) || x.nombre.localeCompare(y.nombre);
+            });
+
+            const tbl = document.createElement('table');
+            tbl.innerHTML = `
+                <thead>
+                    <tr>
+                        <th style="width:70px">#</th>
+                        <th style="min-width:120px">Cédula</th>
+                        <th style="min-width:220px">Nombre</th>
+                        <th style="min-width:80px">Ciclo</th>
+                        <th style="min-width:280px">Asignatura</th>
+                        <th style="min-width:180px">Docente</th>
+                    </tr>
+                </thead>`;
+            const tbody = document.createElement('tbody');
+
+            filas.forEach((f,idx)=>{
+                const tr = document.createElement('tr');
+                tr.className = 'clickable';
+                tr.innerHTML = `
+                    <td>${idx+1}</td>
+                    <td>${f.cedula}</td>
+                    <td>${f.nombre}</td>
+                    <td>${f.ciclo || '—'}</td>
+                    <td>${f.asignatura || '—'}</td>
+                    <td>${f.docente || '—'}</td>`;
+                tr.addEventListener('click', ()=> location.href=`perfil-estudiante.html?cedula=${encodeURIComponent(f.cedula)}`);
+                tbody.appendChild(tr);
+            });
+
+            tbl.appendChild(tbody);
+            contenedorTabla.appendChild(tbl);
+            mostrados = filas.length;
+
+            if (!filas.length){
+                contenedorTabla.innerHTML = `<div class="muted">No hay resultados para los filtros aplicados.</div>`;
+            }
+        }
+
+        kpiMostrando.textContent = mostrados;
+    }
+
+    // ===== Listeners UI (Filtros) =====
+    function debounce(fn, ms=120){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms);} }
+    const debouncedRender = debounce(()=>{ updateFilterOptionsFromSelections(); render(); });
+
+    txtBuscar.addEventListener('input', debouncedRender);
+    selCiclo.addEventListener('change', ()=>{ updateFilterOptionsFromSelections(); render(); });
+    selAsignatura.addEventListener('change', ()=>{ updateFilterOptionsFromSelections(); render(); });
+    selDocente.addEventListener('change', ()=>{ updateFilterOptionsFromSelections(); render(); });
+    btnLimpiar.addEventListener('click', ()=>{
+        txtBuscar.value = '';
+        selCiclo.value = '';
+        selAsignatura.value = '';
+        selDocente.value = '';
+        updateFilterOptionsFromSelections();
+        render();
+    });
+
+    // 🚪 FUNCIÓN PARA CERRAR SESIÓN
+    async function cerrarSesion() {
+        try {
+            await auth.signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error("Error al cerrar sesión:", error);
+            alert("Hubo un error al cerrar sesión. Intente de nuevo.");
+        }
+    }
+
+
+    // ===== 🔑 LÓGICA DE INICIALIZACIÓN (llamada SÓLO por el Supervisor) =====
+    function inicializarUI() {
+        // Inicia los listeners de Firestore (Datos de Clases y Estudiantes)
+        db.collection('clases_definidas').onSnapshot(snap=>{
+            clases = snap.docs.map(d=>{
+                const x = d.data() || {};
+                return {
+                    ciclo: (x.ciclo ?? '').toString(),
+                    asignatura: x.asignatura || '',
+                    profesor: x.profesor || x.docente || ''
+                };
+            });
+            updateFilterOptionsFromSelections();
+            render();
+        });
+
+        db.collection('estudiantes').onSnapshot(snap=>{
+            estudiantes = snap.docs.map(d=> d.data()||{});
+            estudiantes.sort((a,b)=>{
+                const ia = Number.isFinite(a.id_registro)? a.id_registro : 1e9;
+                const ib = Number.isFinite(b.id_registro)? b.id_registro : 1e9;
+                return (ia-ib) || byNombre(a,b);
+            });
+            kpiTotal.textContent = estudiantes.length;
+            updateFilterOptionsFromSelections();
+            render();
+        });
+    }
+
+
+    // ==========================================================
+    // 🔑 BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN (Tu estructura)
+    // ==========================================================
+    auth.onAuthStateChanged(async (user) => {
+        // 1. Si NO hay usuario logueado, redirigir al login
+        if (!user) {
+            window.location.href = "login.html"; 
+            return;
+        }
+
+        // 2. Usuario logueado: Verificar si su UID existe en la colección 'supervisores'
+        try {
+            const userUid = user.uid;
+            // Busca el documento usando el UID como ID del documento
+            const supervisorDoc = await db.collection("supervisores").doc(userUid).get();
+
+            if (supervisorDoc.exists) {
+                // 🔑 ACCESO CONCEDIDO
+                console.log("Supervisor autorizado. Iniciando interfaz.");
+                document.body.style.display = 'block'; // Mostrar la página
+                
+                // 📞 Llamar a la función que inicia toda la lógica de la página
+                inicializarUI(); 
+                
+            } else {
+                // Acceso denegado: Logueado, pero no es supervisor
+                alert("Acceso denegado. No tienes permisos de supervisor.");
+                auth.signOut(); // Desloguear
+                window.location.href = "login.html";
+            }
+
+        } catch (error) {
+            console.error("Error verificando supervisor:", error);
+            alert("Ocurrió un error en la verificación de seguridad.");
+            auth.signOut();
+            window.location.href = "login.html";
+        }
+    });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>UNL · Reportes y Estadísticas (Asistencias & Uso de Equipos)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Librerías -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script> 
+
+
+  <style>
+    :root{ --pri:#0B7A5B; --pri-700:#095c45; --sec:#1e3a8a;
+      --bg:#f6f7fb; --card:#ffffff; --text:#0f172a; --muted:#64748b; --border:#e5e7eb; --chip:#eef2ff; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);
+      display: none;
+    }
+    .shell{max-width:1280px;margin:0 auto;padding:16px}
+    header{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,#fff,#fff8);backdrop-filter:blur(6px);border-bottom:1px solid var(--border)}
+    .bar{display:flex;align-items:center;gap:14px;padding:10px 0}
+    .logo{height:50px;width:auto;object-fit:contain}
+    .brand{flex:1}
+    .brand h1{margin:0;font-size:18px;color:var(--sec);font-weight:800;letter-spacing:.2px}
+    .brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    button,.btn{border:1px solid var(--border);background:#fff;color:var(--sec);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+    button:hover{transform:translateY(-1px);box-shadow:0 6px 18px #0001}
+    .btn-primary{background:var(--pri);color:#fff;border-color:transparent}
+    .btn-primary:hover{background:var(--pri-700)}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .tab{padding:8px 12px;border:1px solid var(--border);border-radius:999px;background:#fff;color:#0f172a;font-weight:700;cursor:pointer}
+    .tab.active{background:var(--pri);border-color:transparent;color:#fff}
+    .grid{display:grid;gap:16px;grid-template-columns:repeat(12,1fr);margin-top:14px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:0 10px 24px #00000008}
+    .col-2{grid-column:span 2}.col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-8{grid-column:span 8}.col-12{grid-column:span 12}
+    @media (max-width:1000px){.col-2,.col-3,.col-4,.col-6,.col-8{grid-column:span 12}}
+
+    .kpi{display:flex;align-items:center;justify-content:space-between}
+    .kpi h3{margin:0;font-size:13px;color:var(--muted);font-weight:600}
+    .kpi .val{font-size:24px;font-weight:800;color:var(--pri)}
+
+    .filters{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+    .field{display:flex;flex-direction:column;gap:6px}
+    .label{font-size:12px;color:var(--muted);font-weight:800}
+    .input,select{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;min-width:180px;outline:none;color:#0b132a}
+    .filters .input,.filters select{width:100%}
+    .muted{color:var(--muted)}
+    .section-title{margin:4px 0 6px;font-weight:800;color:var(--sec)}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+    canvas{width:100%;height:320px}
+    table{border-collapse:collapse;width:100%}
+    thead th{position:sticky;top:0;background:#fff;border-bottom:2px solid var(--border);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding:10px}
+    tbody td{border-bottom:1px solid var(--border);padding:10px;font-size:14px}
+    tbody tr:hover{background:#fafafa}
+    .chip{background:var(--chip);color:#3730a3;padding:6px 10px;border-radius:999px;font-size:12px;border:1px dashed #c7d2fe}
+    details{border:1px dashed var(--border);border-radius:12px;padding:10px;background:#fff}
+    details>summary{cursor:pointer;font-weight:800;color:var(--sec);outline:none}
+    .subgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:10px}
+
+    /* visibilidad por tab */
+    .only-asis{display:block}
+    .only-uso{display:block}
+    .only-tend{display:block}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell bar">
+      <img class="logo" src="logounl.png" alt="UNL" onerror="this.style.display='none'">
+      <div class="brand">
+        <h1>UNIVERSIDAD NACIONAL DE LOJA · LABORATORIO DE TELEMATICA</h1>
+        <p>Reportes y Estadísticas · Asistencias, Uso de Equipos y Tendencias</p>
+      </div>
+      <div class="actions">
+        <button id="btnExportRes" class="btn">📑 Exportar Resúmenes (Excel)</button>
+        <button id="btnExportAsis" class="btn">📘 Exportar Asistencias (Filtro)</button>
+        <button id="btnExportUso"  class="btn">🧰 Exportar Uso Equipos (Filtro)</button>
+        <a class="btn btn-primary" id="btnHome" href="#">Ir al portal</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="btn-row" style="margin:4px 0 10px">
+      <button id="btnLogout" class="btn-mini warn" onclick="firebase.auth().signOut().then(() => { window.location.href = 'login.html'; })">
+            🚪 Cerrar Sesión
+        </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="asis">Asistencias</div>
+      <div class="tab" data-tab="equipos">Uso de equipos</div>
+      <div class="tab" data-tab="tendencias">Tendencias Globales</div>
+    </div>
+
+    <!-- Filtros -->
+    <section class="card col-12" style="margin-top:10px">
+      <div class="filters">
+        <!-- búsqueda global -->
+        <div class="field col-4">
+          <label class="label" for="q">🔎 Buscar</label>
+          <input id="q" class="input" placeholder="nombre, cédula, asignatura, profesor, equipo, código, modelo, marca" list="dlBuscar"/>
+          <datalist id="dlBuscar"></datalist>
+        </div>
+
+        <!-- Fechas -->
+        <div class="field col-2">
+          <label class="label" for="f1">Desde</label>
+          <input id="f1" type="date" class="input" />
+        </div>
+        <div class="field col-2">
+          <label class="label" for="f2">Hasta</label>
+          <input id="f2" type="date" class="input" />
+        </div>
+
+        <!-- este selector se mantiene oculto; lo setea el tab -->
+        <select id="selTipoRegistro" class="input col-2" style="display:none">
+          <option value="">Todos (asis+uso)</option>
+          <option value="asistencias">Solo asistencias</option>
+          <option value="uso_libre">Solo uso de equipos</option>
+        </select>
+
+        <!-- ===== Solo ASISTENCIAS ===== -->
+        <select id="selTipoAsis" class="input col-2 only-asis">
+          <option value="">Tipo asistencia (todos)</option>
+          <option value="clase">clase</option>
+          <option value="practica">practica</option>
+        </select>
+        <select id="selCiclo" class="input col-2 only-asis">
+          <option value="">Ciclo (todos)</option>
+        </select>
+        <select id="selAsig" class="input col-3 only-asis">
+          <option value="">Asignatura (todas)</option>
+        </select>
+        <select id="selProf" class="input col-3 only-asis">
+          <option value="">Profesor (todos)</option>
+        </select>
+        <div class="field col-2 only-asis">
+          <label class="label" for="cedula">Cédula (exacta)</label>
+          <input id="cedula" class="input" list="dlCedulas" placeholder="Ej: 1104…"/>
+          <datalist id="dlCedulas"></datalist>
+        </div>
+        <div class="field col-2 only-asis">
+          <label class="label" for="tolMin">Tolerancia (min)</label>
+          <input id="tolMin" type="number" min="0" value="5" class="input" />
+        </div>
+
+        <!-- ===== Solo EQUIPOS ===== -->
+        <div class="field col-2 only-uso">
+          <label class="label" for="eqCodigo">Código equipo</label>
+          <input id="eqCodigo" class="input" list="dlEqCodigo"/>
+          <datalist id="dlEqCodigo"></datalist>
+        </div>
+        <div class="field col-2 only-uso">
+          <label class="label" for="eqNombre">Nombre equipo</label>
+          <input id="eqNombre" class="input" list="dlEqNombre"/>
+          <datalist id="dlEqNombre"></datalist>
+        </div>
+        <div class="field col-2 only-uso">
+          <label class="label" for="eqMarca">Marca</label>
+          <input id="eqMarca" class="input" list="dlEqMarca"/>
+          <datalist id="dlEqMarca"></datalist>
+        </div>
+        <div class="field col-2 only-uso">
+          <label class="label" for="eqModelo">Modelo</label>
+          <input id="eqModelo" class="input" list="dlEqModelo"/>
+          <datalist id="dlEqModelo"></datalist>
+        </div>
+
+        <div class="btn-row col-12">
+          <button id="btnAplicar" class="btn">Aplicar filtros</button>
+          <button id="btnLimpiar" class="btn">Limpiar</button>
+          <button id="btnHoy" class="btn">Hoy</button>
+          <button id="btnSemana" class="btn">Últimos 7 días</button>
+          <button id="btnMes" class="btn">Últimos 30 días</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section id="kpiWrap" class="grid">
+      <div class="card col-3"><div class="kpi"><div><h3>Registros (filtro)</h3><div class="val" id="kpiTotal">0</div></div><span class="muted">asis+uso</span></div></div>
+      <div class="card col-3"><div class="kpi"><div><h3>Última fecha</h3><div class="val" id="kpiUltima">—</div></div><span class="muted">máxima</span></div></div>
+      <div class="card col-3"><div class="kpi"><div><h3>Estudiantes únicos</h3><div class="val" id="kpiEstudiantes">0</div></div><span class="muted">por cédula</span></div></div>
+      <div class="card col-3"><div class="kpi"><div><h3>Equipos distintos</h3><div class="val" id="kpiEquipos">0</div></div><span class="muted">uso</span></div></div>
+    </section>
+
+    <!-- ======== ASISTENCIAS ======== -->
+    <section id="tab-asis" class="grid">
+      <details class="col-12" open>
+        <summary>Resumen por asignatura/profesor/ciclo y horas pico</summary>
+        <div class="subgrid">
+          <div class="card col-6"><div class="section-title">Asistencias por Asignatura</div><canvas id="chAsig"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chAsig">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Asistencias por Profesor</div><canvas id="chProf"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chProf">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Asistencias por Ciclo</div><canvas id="chCiclo"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chCiclo">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Horas pico (asistencias)</div><canvas id="chHorasAsis"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chHorasAsis">📷 Guardar PNG</button></div></div>
+        </div>
+      </details>
+
+      <details class="col-12">
+        <summary>Puntualidad y Retrasos (con hora real de marcado)</summary>
+        <div class="subgrid">
+          <div class="card col-4">
+            <div class="section-title">KPIs de puntualidad</div>
+            <ul class="muted" id="kpisPunt" style="margin:8px 0 0 18px; line-height:1.8"></ul>
+            <div class="muted" style="margin-top:8px">Tolerancia: <b id="tolLabel">5</b> min · puedes cambiarla arriba.</div>
+          </div>
+          <div class="card col-8"><div class="section-title">Puntualidad por Asignatura</div><canvas id="chPuntAsig"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chPuntAsig">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Puntualidad por Profesor</div><canvas id="chPuntProf"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chPuntProf">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Distribución de llegadas (minutos)</div><canvas id="chLateDist"></canvas><div class="muted" style="margin-top:6px">Bajo 0 = llegó antes; sobre 0 = llegó después.</div><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chLateDist">📷 Guardar PNG</button></div></div>
+        </div>
+      </details>
+
+      <details class="col-12">
+        <summary>Rendimiento por Estudiante (porcentaje, puntualidad y rachas)</summary>
+        <div class="subgrid">
+          <div class="card col-12">
+            <div class="section-title">Top Estudiantes (por número de asistencias)</div>
+            <div class="muted" style="margin-bottom:8px">Se listan los 20 primeros del filtro actual.</div>
+            <div class="tabla-wrap">
+              <table><thead><tr><th>#</th><th>Cédula</th><th>Nombre</th><th>Asistencias</th></tr></thead><tbody id="tbTopEst"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card col-12">
+            <div class="section-title">Porcentaje de asistencia (estimado)</div>
+            <div class="muted" style="margin-bottom:8px">% = sesiones únicas asistidas ÷ sesiones posibles en el/los grupos donde participa.</div>
+            <div class="tabla-wrap">
+              <table><thead><tr><th>#</th><th>Cédula</th><th>Nombre</th><th>Sesiones asistidas</th><th>Sesiones posibles</th><th>%</th></tr></thead><tbody id="tbPctEst"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card col-6">
+            <div class="section-title">Puntualidad por estudiante</div>
+            <div class="tabla-wrap">
+              <table><thead><tr><th>#</th><th>Cédula</th><th>Nombre</th><th>% a tiempo</th><th>Retraso prom. (min)</th></tr></thead><tbody id="tbPuntEst"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card col-6">
+            <div class="section-title">Rachas (días consecutivos con asistencia)</div>
+            <div class="tabla-wrap">
+              <table><thead><tr><th>#</th><th>Cédula</th><th>Nombre</th><th>Máx. racha (días)</th></tr></thead><tbody id="tbRachas"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="col-12">
+        <summary>Sesiones (fecha · asignatura · hora) y Fechas críticas</summary>
+        <div class="subgrid">
+          <div class="card col-12">
+            <div class="section-title">Sesiones (fecha · asignatura · hora)</div>
+            <div class="tabla-wrap">
+              <table><thead><tr><th>#</th><th>Fecha</th><th>Asignatura</th><th>Profesor</th><th>Ciclo</th><th>Hora</th><th>Asistentes</th></tr></thead><tbody id="tbSesiones"></tbody></table>
+            </div>
+          </div>
+
+          <div class="card col-12">
+            <div class="section-title">Fechas críticas (menor asistencia)</div>
+            <div class="tabla-wrap">
+              <table><thead><tr><th>#</th><th>Fecha</th><th>Total asistencias</th></tr></thead><tbody id="tbFechasCrit"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ======== EQUIPOS ======== -->
+    <section id="tab-equipos" class="grid" style="display:none">
+      <details class="col-12" open>
+        <summary>Uso general por equipo y horas pico</summary>
+        <div class="subgrid">
+          <div class="card col-6"><div class="section-title">Uso por Equipo (conteo sesiones)</div><canvas id="chEquipos"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chEquipos">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Duración Promedio (min) por Equipo</div><canvas id="chDuracion"></canvas><div class="muted" style="margin-top:6px">Calculado si hay <em>reserva_hora_inicio</em> y <em>reserva_hora_fin</em>.</div><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chDuracion">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Horas pico (uso de equipos)</div><canvas id="chHorasUso"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chHorasUso">📷 Guardar PNG</button></div></div>
+          <div class="card col-6"><div class="section-title">Tendencia diaria (solo equipos)</div><canvas id="chUsoDia"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chUsoDia">📷 Guardar PNG</button></div></div>
+          <div class="card col-12">
+            <div class="section-title">Top Equipos (sesiones y duración promedio)</div>
+            <div class="tabla-wrap">
+              <table><thead><tr><th>#</th><th>Código</th><th>Nombre</th><th>Marca</th><th>Modelo</th><th>Sesiones</th><th>Duración prom. (min)</th></tr></thead><tbody id="tbTopEquipos"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ======== TENDENCIAS ======== -->
+    <section id="tab-tendencias" class="grid" style="display:none">
+      <details class="col-12" open>
+        <summary>Tendencias y comparativas</summary>
+        <div class="subgrid">
+          <div class="card col-12"><div class="section-title">Tendencia diaria (Asistencias + Uso Equipos)</div><canvas id="chTrend"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chTrend">📷 Guardar PNG</button></div></div>
+          <div class="card col-12"><div class="section-title">Horas pico (comparativo asis vs equipos)</div><canvas id="chHorasStack"></canvas><div class="btn-row" style="margin-top:8px"><button class="btn" data-dl="chHorasStack">📷 Guardar PNG</button></div></div>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <script>
+    // ===== Firebase =====
+    const firebaseConfig = {
+      apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+      authDomain: "escaner-qr-d7d65.firebaseapp.com",
+      projectId: "escaner-qr-d7d65",
+      storageBucket: "escaner-qr-d7d65.appspot.com",
+      messagingSenderId: "982923527298",
+      appId: "1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // ===== Estado & Utils =====
+    const $ = s => document.querySelector(s);
+    const $$ = s => Array.from(document.querySelectorAll(s));
+    const state = { asisRaw:[], usoRaw:[], asisView:[], usoView:[] };
+    let activeTab = 'asis';
+
+    function norm(v){ return (v ?? "").toString().trim(); }
+    const toInt = (s, def=0) => { const n = parseInt(s,10); return isNaN(n)?def:n; };
+    function safeTS(ts){
+      if(ts && typeof ts.toDate === "function") return ts.toDate();
+      if(typeof ts === "string"){ const d=new Date(ts); if(!isNaN(d)) return d; }
+      return null;
+    }
+    function dateStrISO(d){ if(!d) return ""; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+    function parseFecha(fecha){
+      if(!fecha) return null;
+      if(fecha.includes("-")){ const [y,m,da]=fecha.split("-").map(Number); if(y&&m&&da) return new Date(y,m-1,da); }
+      if(fecha.includes("/")){ const [d,m,y]=fecha.split("/").map(Number); if(d&&m&&y) return new Date(y,m-1,d); }
+      const d=new Date(fecha); return isNaN(d)?null:d;
+    }
+    function betweenDates(fechaStr, f1, f2){
+      if(!f1 && !f2) return true;
+      const d = parseFecha(fechaStr);
+      if(!d) return false;
+      if(f1 && d < f1) return false;
+      if(f2 && d > f2) return false;
+      return true;
+    }
+    function minutesOfDay(d){ return d.getHours()*60 + d.getMinutes(); }
+    function hhmmToMin(hhmm){ if(!hhmm) return null; const [H,M] = hhmm.split(":").map(Number); if([H,M].some(isNaN)) return null; return H*60+M; }
+    function diffMin(h1, h2){ if(!h1 || !h2) return null; const m1=hhmmToMin(h1), m2=hhmmToMin(h2); if(m1==null || m2==null) return null; return m2 - m1; }
+    const groupBy = (arr, keyFn) => arr.reduce((acc,x)=>{ const k=keyFn(x); (acc[k]||(acc[k]=[])).push(x); return acc; },{});
+
+function inicializarReportes() {
+        
+        // ===== Eventos UI (MOVIDO AQUÍ) =====
+        $("#btnAplicar").addEventListener("click", applyFilters);
+        $("#btnLimpiar").addEventListener("click", ()=>{
+            ["q","f1","f2","selTipoAsis","selCiclo","selAsig","selProf","cedula","eqCodigo","eqNombre","eqMarca","eqModelo","tolMin"]
+              .forEach(id=>{ const el=$("#"+id); if(el){ if(id==="tolMin") el.value="5"; else el.value=""; }});
+            applyFilters();
+        });
+
+        function quick(days){ setQuickRange(days); applyFilters(); }
+        $("#btnHoy").addEventListener("click", ()=>quick(1));
+        $("#btnSemana").addEventListener("click", ()=>quick(7));
+        $("#btnMes").addEventListener("click", ()=>quick(30));
+
+        // Tabs
+        $$(".tab").forEach(t=>{
+          t.addEventListener("click", ()=>{
+            $$(".tab").forEach(x=>x.classList.remove("active"));
+            t.classList.add("active");
+            activeTab = t.dataset.tab;
+
+            $("#tab-asis").style.display = (activeTab==="asis")?"grid":"none";
+            $("#tab-equipos").style.display = (activeTab==="equipos")?"grid":"none";
+            $("#tab-tendencias").style.display = (activeTab==="tendencias")?"grid":"none";
+
+            updateFilterVisibility();
+            applyFilters();
+            setTimeout(()=>{ const F=getFilters(); drawAll(F); }, 50);
+          });
+        });
+
+        // Descargar PNG de gráfico
+        document.addEventListener("click", (e)=>{
+          const id = e.target?.dataset?.dl;
+          if(!id) return;
+          const cv = $("#"+id);
+          const link = document.createElement("a");
+          link.download = id + ".png";
+          link.href = cv.toDataURL("image/png");
+          link.click();
+        });
+
+        // Export buttons
+    $("#btnExportAsis").addEventListener("click", exportAsistenciasFiltro);
+    $("#btnExportUso").addEventListener("click", exportUsoFiltro);
+    $("#btnExportRes").addEventListener("click", exportResumenes);
+
+
+        // Home
+        $("#btnHome").addEventListener("click", (e)=>{
+          e.preventDefault();
+          // Cierre de sesión añadido para redirigir correctamente al login.
+          firebase.auth().signOut().then(()=>{
+             window.location.href = "https://escaner-qr-d7d65.web.app/portal.html"; 
+          });
+        });
+
+        // Start (MOVIDO AQUÍ)
+        loadAll().then(()=>{ 
+            populateCatalogs(); // Ahora se llaman aquí, después de cargar los datos
+            buildDatalists();
+            setQuickRange(30);
+            updateFilterVisibility();
+            applyFilters(); 
+        }).catch(err=>{
+          console.error(err);
+          // Puedes añadir un mensaje de error visible al usuario si lo necesitas
+          // contenedor.innerHTML = `<div class="card col-12" style="color:#b91c1c">Error cargando datos: ${err.message}</div>`;
+        });
+    }
+
+
+
+
+    // ===== Carga =====
+    async function loadAll(){
+      const [asisSnap, usoSnap] = await Promise.all([
+        db.collection("asistencias").orderBy("timestamp","asc").get(),
+        db.collection("uso_libre").orderBy("timestamp","asc").get(),
+      ]);
+
+      state.asisRaw = asisSnap.docs.map(d=>{
+        const x = d.data()||{}; const ts = safeTS(x.timestamp);
+        const fechaNorm = norm(x.fecha) || (ts?dateStrISO(ts):"");
+        return {
+          _id:d.id, cedula:norm(x.cedula || x.id || ""), nombre:norm(x.nombre),
+          ciclo:norm(x.ciclo), asignatura:norm(x.asignatura), profesor:norm(x.profesor),
+          fecha:fechaNorm, hora:norm(x.hora), tipo:norm(x.tipo || "clase"),
+          timestamp: ts || x.timestamp || "",
+        };
+      });
+
+      state.usoRaw = usoSnap.docs.map(d=>{
+        const x = d.data()||{}; const ts = safeTS(x.timestamp);
+        const fechaNorm = norm(x.fecha) || (ts?dateStrISO(ts):"");
+        return {
+          _id:d.id, cedula:norm(x.cedula || x.id || ""), nombre:norm(x.nombre),
+          equipo_codigo:norm(x.equipo_codigo), equipo_nombre:norm(x.equipo_nombre),
+          equipo_marca:norm(x.equipo_marca), equipo_modelo:norm(x.equipo_modelo),
+          fecha:fechaNorm, hora:norm(x.hora),
+          reserva_hora_inicio:norm(x.reserva_hora_inicio), reserva_hora_fin:norm(x.reserva_hora_fin),
+          tipo:norm(x.tipo || "uso_reserva"), timestamp: ts || x.timestamp || "",
+        };
+      });
+
+      populateCatalogs();
+      buildDatalists();
+      setQuickRange(30);
+      applyFilters();
+    }
+
+    // ===== Catálogos para selects =====
+    function populateCatalogs(){
+      const setCiclo = new Set(state.asisRaw.map(x=>norm(x.ciclo)).filter(Boolean));
+      $("#selCiclo").innerHTML = `<option value="">Ciclo (todos)</option>` +
+        Array.from(setCiclo).sort((a,b)=>a.localeCompare(b, 'es', {numeric:true})).map(c=>`<option value="${c}">${c}</option>`).join("");
+
+      const setAsig = new Set(state.asisRaw.map(x=>norm(x.asignatura)).filter(Boolean));
+      $("#selAsig").innerHTML = `<option value="">Asignatura (todas)</option>` +
+        Array.from(setAsig).sort().map(a=>`<option value="${a}">${a}</option>`).join("");
+
+      const setProf = new Set(state.asisRaw.map(x=>norm(x.profesor)).filter(Boolean));
+      $("#selProf").innerHTML = `<option value="">Profesor (todos)</option>` +
+        Array.from(setProf).sort().map(p=>`<option value="${p}">${p}</option>`).join("");
+    }
+
+    // ===== Datalists (sugerencias de escritura) =====
+    function buildDatalists(){
+      const unique = arr => Array.from(new Set(arr.filter(Boolean)));
+      const cap = (arr, n=150) => arr.slice(0, n);
+
+      const dls = {
+        dlCedulas: unique([...state.asisRaw.map(x=>x.cedula), ...state.usoRaw.map(x=>x.cedula)]),
+        dlEqCodigo: unique(state.usoRaw.map(x=>x.equipo_codigo)),
+        dlEqNombre: unique(state.usoRaw.map(x=>x.equipo_nombre)),
+        dlEqMarca:  unique(state.usoRaw.map(x=>x.equipo_marca)),
+        dlEqModelo: unique(state.usoRaw.map(x=>x.equipo_modelo)),
+        dlBuscar: unique([
+          ...state.asisRaw.map(x=>x.nombre),
+          ...state.asisRaw.map(x=>x.cedula),
+          ...state.asisRaw.map(x=>x.asignatura),
+          ...state.asisRaw.map(x=>x.profesor),
+          ...state.usoRaw.map(x=>x.equipo_nombre),
+          ...state.usoRaw.map(x=>x.equipo_codigo),
+          ...state.usoRaw.map(x=>x.equipo_modelo),
+          ...state.usoRaw.map(x=>x.equipo_marca),
+        ])
+      };
+
+      Object.entries(dls).forEach(([id, vals])=>{
+        const el = $("#"+id);
+        el.innerHTML = cap(vals.sort((a,b)=>a.localeCompare(b,'es',{numeric:true})))
+          .map(v=>`<option value="${v}">`).join("");
+      });
+    }
+
+    // ===== Filtros =====
+    function getFilters(){
+      const q = norm($("#q").value).toLowerCase();
+      const f1 = $("#f1").value ? new Date($("#f1").value+"T00:00:00") : null;
+      const f2 = $("#f2").value ? new Date($("#f2").value+"T23:59:59") : null;
+
+      const tipoRegistro = norm($("#selTipoRegistro").value);
+      const tipoAsis = norm($("#selTipoAsis")?.value || "");
+      const ciclo = norm($("#selCiclo")?.value || "");
+      const asignatura = norm($("#selAsig")?.value || "");
+      const profesor = norm($("#selProf")?.value || "");
+      const cedula = norm($("#cedula")?.value || "");
+
+      const eqCodigo = norm($("#eqCodigo")?.value || "");
+      const eqNombre = norm($("#eqNombre")?.value || "");
+      const eqMarca  = norm($("#eqMarca")?.value  || "");
+      const eqModelo = norm($("#eqModelo")?.value || "");
+
+      const tol = Math.max(0, toInt($("#tolMin")?.value || "5", 5));
+      $("#tolLabel") && ($("#tolLabel").textContent = tol.toString());
+
+      return {q,f1,f2,tipoRegistro,tipoAsis,ciclo,asignatura,profesor,cedula,eqCodigo,eqNombre,eqMarca,eqModelo,tol};
+    }
+
+    function matchQ(haystack, q){ return !q || haystack.toLowerCase().includes(q); }
+
+    function applyFilters(){
+      const F = getFilters();
+
+      // Asistencias
+      state.asisView = state.asisRaw.filter(r=>{
+        if(F.tipoRegistro==="uso_libre") return false;
+        if(!betweenDates(r.fecha, F.f1, F.f2)) return false;
+        if(F.tipoAsis && norm(r.tipo)!==F.tipoAsis) return false; // solo clase/practica
+        if(F.ciclo && norm(r.ciclo)!==F.ciclo) return false;
+        if(F.asignatura && norm(r.asignatura)!==F.asignatura) return false;
+        if(F.profesor && norm(r.profesor)!==F.profesor) return false;
+        if(F.cedula && norm(r.cedula)!==F.cedula) return false;
+
+        const texto = [r.nombre,r.cedula,r.asignatura,r.profesor,r.fecha,r.hora,r.ciclo,r.tipo].map(norm).join(" ");
+        if(!matchQ(texto, F.q)) return false;
+        return true;
+      });
+
+      // Uso Equipos (sin tipo de uso, todo es reserva)
+      state.usoView = state.usoRaw.filter(r=>{
+        if(F.tipoRegistro==="asistencias") return false;
+        if(!betweenDates(r.fecha, F.f1, F.f2)) return false;
+        if(F.cedula && norm(r.cedula)!==F.cedula) return false; // por si quieren filtrar por estudiante, aunque el tab lo oculta
+        if(F.eqCodigo && norm(r.equipo_codigo)!==F.eqCodigo) return false;
+        if(F.eqNombre && norm(r.equipo_nombre)!==F.eqNombre) return false;
+        if(F.eqMarca  && norm(r.equipo_marca)!==F.eqMarca) return false;
+        if(F.eqModelo && norm(r.equipo_modelo)!==F.eqModelo) return false;
+
+        const texto = [r.nombre,r.cedula,r.equipo_nombre,r.equipo_codigo,r.equipo_modelo,r.equipo_marca,r.fecha,r.hora].map(norm).join(" ");
+        if(!matchQ(texto, F.q)) return false;
+        return true;
+      });
+
+      refreshKPIs();
+      drawAll(F);
+      fillTables(F);
+    }
+
+    function setQuickRange(days){
+      const hoy = new Date();
+      const f2 = dateStrISO(hoy);
+      const f1d = new Date(hoy.getTime() - (days-1)*24*3600*1000);
+      const f1 = dateStrISO(f1d);
+      $("#f1").value = f1;
+      $("#f2").value = f2;
+    }
+
+    // ===== KPIs =====
+    function refreshKPIs(){
+      const total = state.asisView.length + state.usoView.length;
+      $("#kpiTotal").textContent = total.toString();
+
+      const allFechas = [...state.asisView.map(x=>x.fecha), ...state.usoView.map(x=>x.fecha)].filter(Boolean).sort();
+      $("#kpiUltima").textContent = allFechas.length ? allFechas[allFechas.length-1] : "—";
+
+      const estSet = new Set(state.asisView.map(x=>norm(x.cedula)).filter(Boolean)); // solo tiene sentido en asistencias
+      $("#kpiEstudiantes").textContent = estSet.size.toString();
+
+      const eqSet = new Set(state.usoView.map(x=>norm(x.equipo_codigo)).filter(Boolean));
+      $("#kpiEquipos").textContent = eqSet.size.toString();
+    }
+
+    // ===== Gráficos =====
+    const charts = {};
+    function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+    function barCfg(labels, data, title, stacked=false){
+      return { type:'bar', data:{ labels, datasets:[{label:title, data}]},
+        options:{ responsive:true, plugins:{ legend:{display:false}, tooltip:{mode:'index',intersect:false}},
+          scales:{ x:{stacked}, y:{stacked, beginAtZero:true, ticks:{precision:0}} } } }
+    }
+    function doughCfg(labels, data, title){
+      return { type:'doughnut', data:{ labels, datasets:[{label:title, data}]},
+        options:{ responsive:true, plugins:{ legend:{position:'bottom'}}} }
+    }
+    function lineCfg(labels, dataArr, titles){
+      return { type:'line',
+        data:{ labels, datasets:dataArr.map((d,i)=>({label: titles[i], data:d, fill:false, tension:0.25})) },
+        options:{ responsive:true, scales:{y:{beginAtZero:true, ticks:{precision:0}}} } }
+    }
+    function drawBar(id, labels, data, title){ destroyChart(id); charts[id]=new Chart($("#"+id), barCfg(labels,data,title)); }
+    function drawDough(id, labels, data, title){ destroyChart(id); charts[id]=new Chart($("#"+id), doughCfg(labels,data,title)); }
+    function drawLine(id, labels, dataArr, titles){ destroyChart(id); charts[id]=new Chart($("#"+id), lineCfg(labels,dataArr,titles)); }
+
+    function drawAll(F){
+      // === Asistencias ===
+      const asis = state.asisView;
+
+      // Por asignatura / profesor / ciclo
+      const byAsig = Object.entries(groupBy(asis, x=>norm(x.asignatura)||"—")).map(([k,v])=>({k,v:v.length})).sort((a,b)=>b.v-a.v).slice(0,20);
+      drawBar("chAsig", byAsig.map(x=>x.k), byAsig.map(x=>x.v), "Asistencias");
+
+      const byProf = Object.entries(groupBy(asis, x=>norm(x.profesor)||"—")).map(([k,v])=>({k,v:v.length})).sort((a,b)=>b.v-a.v).slice(0,15);
+      drawDough("chProf", byProf.map(x=>x.k), byProf.map(x=>x.v), "Profesor");
+
+      const byCiclo = Object.entries(groupBy(asis, x=>norm(x.ciclo)||"—")).map(([k,v])=>({k,v:v.length}))
+        .sort((a,b)=> a.k.localeCompare(b.k,'es',{numeric:true}));
+      drawBar("chCiclo", byCiclo.map(x=>x.k), byCiclo.map(x=>x.v), "Ciclo");
+
+      // Horas pico asistencias
+      const byHourA = new Array(24).fill(0);
+      asis.forEach(x=>{ const h = toInt((x.hora||"").split(":")[0], -1); if(h>=0 && h<24) byHourA[h] += 1; });
+      drawBar("chHorasAsis", byHourA.map((_,i)=>String(i).padStart(2,"0")+":00"), byHourA, "Asistencias por hora");
+
+      // === Puntualidad ===
+      const tol = F.tol ?? 5;
+      const lateVals = [];
+      let onTime=0, late=0, early=0, withTS=0, sumLatePos=0, cntLatePos=0;
+
+      const asisWithPunct = asis.map(r=>{
+        const ts = r.timestamp instanceof Date ? r.timestamp : (r.timestamp ? new Date(r.timestamp) : null);
+        const schedMin = hhmmToMin(r.hora);
+        if(!ts || schedMin==null) return {...r, delta:null, punctual:null};
+        const delta = minutesOfDay(ts) - schedMin;
+        lateVals.push(delta);
+        withTS++;
+        if(delta<=tol && delta>=-30) { onTime++; }
+        if(delta>tol){ late++; sumLatePos+=delta; cntLatePos++; }
+        if(delta<-30){ early++; }
+        return {...r, delta, punctual: (delta<=tol)};
+      });
+
+      const byAsigP = Object.entries(groupBy(asisWithPunct.filter(x=>x.delta!=null), x=>norm(x.asignatura)||"—"))
+        .map(([k,v])=>{ const ok=v.filter(z=>z.delta<=tol && z.delta>=-30).length; return {k, pct: v.length? Math.round(100*ok/v.length):0}; })
+        .sort((a,b)=>b.pct-a.pct).slice(0,20);
+      drawBar("chPuntAsig", byAsigP.map(x=>x.k), byAsigP.map(x=>x.pct), "% a tiempo");
+
+      const byProfP = Object.entries(groupBy(asisWithPunct.filter(x=>x.delta!=null), x=>norm(x.profesor)||"—"))
+        .map(([k,v])=>{ const ok=v.filter(z=>z.delta<=tol && z.delta>=-30).length; return {k, pct: v.length? Math.round(100*ok/v.length):0}; })
+        .sort((a,b)=>b.pct-a.pct).slice(0,20);
+      drawBar("chPuntProf", byProfP.map(x=>x.k), byProfP.map(x=>x.pct), "% a tiempo");
+
+      // Distribución de llegadas
+      const bins=[-60,-45,-30,-20,-10,-5,0,5,10,15,20,30,45,60];
+      const labBins=bins.map((b,i)=> i<bins.length-1?`${bins[i]}..${bins[i+1]}`: `${bins[i]}+`);
+      const hist = new Array(labBins.length).fill(0);
+      lateVals.forEach(v=>{
+        let idx = bins.findIndex((b,i)=> (i<bins.length-1 ? (v>=bins[i] && v<bins[i+1]) : v>=bins[i]));
+        if(idx<0) idx = labBins.length-1;
+        hist[idx]++;
+      });
+      drawBar("chLateDist", labBins, hist, "Llegada vs inicio (min)");
+
+      // KPIs puntualidad en natural
+      const kpis = [
+        `<b>${withTS}</b> registros con hora de marcado disponible.`,
+        `<b>${onTime}</b> llegaron a tiempo (hasta ${tol} min después o 30 min antes).`,
+        `<b>${late}</b> llegaron tarde (más de ${tol} min después).`,
+        `<b>${early}</b> llegaron muy temprano (más de 30 min antes).`,
+        `Entre los tardíos, el retraso promedio fue <b>${cntLatePos?Math.round(sumLatePos/cntLatePos):0} min</b>.`,
+      ];
+      $("#kpisPunt").innerHTML = kpis.map(k=>`<li>${k}</li>`).join("");
+
+      // === Equipos ===
+      const uso = state.usoView;
+      const byEq = Object.entries(groupBy(uso, x=>norm(x.equipo_codigo)||"—"))
+        .map(([k,v])=>({k, nombre:norm(v[0]?.equipo_nombre)||"—", marca:norm(v[0]?.equipo_marca)||"", modelo:norm(v[0]?.equipo_modelo)||"", v:v.length}))
+        .sort((a,b)=>b.v-a.v).slice(0,20);
+      drawBar("chEquipos", byEq.map(x=>x.k), byEq.map(x=>x.v), "Sesiones por equipo");
+
+      const byEqDur = Object.entries(groupBy(uso, x=>norm(x.equipo_codigo)||"—")).map(([k,arr])=>{
+        const mins = arr.map(z=>diffMin(z.reserva_hora_inicio, z.reserva_hora_fin)).filter(m=>m!=null && m>=0);
+        const avg = mins.length ? Math.round(mins.reduce((a,b)=>a+b,0)/mins.length) : 0;
+        return {k, avg};
+      }).sort((a,b)=>b.avg-a.avg).slice(0,20);
+      drawBar("chDuracion", byEqDur.map(x=>x.k), byEqDur.map(x=>x.avg), "Minutos promedio");
+
+      const byHourU = new Array(24).fill(0);
+      uso.forEach(x=>{ const h = toInt((x.hora||"").split(":")[0], -1); if(h>=0 && h<24) byHourU[h] += 1; });
+      drawBar("chHorasUso", byHourU.map((_,i)=>String(i).padStart(2,"0")+":00"), byHourU, "Uso por hora");
+
+      const byDayUsoMap = groupBy(uso, x=>x.fecha||"—");
+      const byDayUso = Object.keys(byDayUsoMap).sort().map(d=>({d, v: byDayUsoMap[d].length}));
+      drawLine("chUsoDia", byDayUso.map(x=>x.d), [byDayUso.map(x=>x.v)], ["Uso"]);
+
+      // === Tendencias globales ===
+      const allDays = {};
+      state.asisView.forEach(x=>allDays[x.fecha]=allDays[x.fecha]||{a:0,u:0});
+      state.usoView.forEach(x=>allDays[x.fecha]=allDays[x.fecha]||{a:0,u:0});
+      state.asisView.forEach(x=>allDays[x.fecha].a+=1);
+      state.usoView.forEach(x=>allDays[x.fecha].u+=1);
+      const labels = Object.keys(allDays).sort();
+      const valsA = labels.map(d=>allDays[d].a);
+      const valsU = labels.map(d=>allDays[d].u);
+      drawLine("chTrend", labels, [valsA, valsU], ["Asistencias","Uso equipos"]);
+
+      const labH = new Array(24).fill(0).map((_,i)=>String(i).padStart(2,"0")+":00");
+      destroyChart("chHorasStack");
+      charts["chHorasStack"] = new Chart($("#chHorasStack"), {
+        type:'bar',
+        data:{ labels:labH, datasets:[{label:"Asistencias", data:byHourA},{label:"Uso equipos", data:byHourU}] },
+        options:{ responsive:true, plugins:{tooltip:{mode:'index',intersect:false}},
+          scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}} }
+      });
+    }
+
+    // ===== Tablas & métricas =====
+    function fillTables(F){
+      // Top Estudiantes
+      const topMap = {};
+      state.asisView.forEach(x=>{
+        const k = norm(x.cedula)||"—";
+        topMap[k] = topMap[k] || {cedula:k, nombre:norm(x.nombre)||"—", c:0};
+        topMap[k].c += 1;
+      });
+      const topArr = Object.values(topMap).sort((a,b)=>b.c-a.c).slice(0,20);
+      const tb1 = $("#tbTopEst"); tb1.innerHTML=""; topArr.forEach((r,i)=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${i+1}</td><td>${r.cedula}</td><td>${r.nombre}</td><td>${r.c}</td>`;
+        tb1.appendChild(tr);
+      });
+
+      // Sesiones agrupadas
+      const sesMap = groupBy(state.asisView, x=>`${x.fecha}||${x.asignatura}||${x.hora}||${x.profesor}||${x.ciclo}`);
+      const sesArr = Object.entries(sesMap).map(([k,v])=>{ const [fecha,asig,hora,prof,ciclo]=k.split("||"); return {fecha,asig,hora,prof,ciclo, c:v.length}; })
+        .sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+      const tb2=$("#tbSesiones"); tb2.innerHTML="";
+      sesArr.forEach((r,i)=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${i+1}</td><td>${r.fecha}</td><td>${r.asig}</td><td>${r.prof}</td><td>${r.ciclo}</td><td>${r.hora}</td><td>${r.c}</td>`;
+        tb2.appendChild(tr);
+      });
+
+      // Fechas críticas
+      const byDay = Object.entries(groupBy(state.asisView, x=>x.fecha||"—"))
+        .map(([d,arr])=>({d, v:arr.length})).sort((a,b)=>a.v-b.v).slice(0,10);
+      const tbCrit=$("#tbFechasCrit"); tbCrit.innerHTML="";
+      byDay.forEach((r,i)=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${i+1}</td><td>${r.d}</td><td>${r.v}</td>`;
+        tbCrit.appendChild(tr);
+      });
+
+      // % asistencia estimado
+      const combosAll = groupBy(state.asisView, x=>`${x.asignatura}||${x.profesor}||${x.ciclo}`);
+      const combosCount = Object.fromEntries(Object.entries(combosAll).map(([k,v])=>[k, new Set(v.map(x=>`${x.fecha}||${x.hora}`)).size]));
+      const estToCombos = {}, estToSessionsAtt = {};
+      state.asisView.forEach(x=>{
+        const kEst=norm(x.cedula)||"—"; const combo=`${x.asignatura}||${x.profesor}||${x.ciclo}`;
+        (estToCombos[kEst]||(estToCombos[kEst]=new Set())).add(combo);
+        (estToSessionsAtt[kEst]||(estToSessionsAtt[kEst]=new Set())).add(`${combo}||${x.fecha}||${x.hora}`);
+      });
+      const pctRows = Object.keys(estToCombos).map(ced=>{
+        const combos=Array.from(estToCombos[ced]); const pos=combos.reduce((a,c)=>a+(combosCount[c]||0),0);
+        const att=(estToSessionsAtt[ced]||new Set()).size;
+        const nombre=(state.asisView.find(x=>norm(x.cedula)===ced)?.nombre)||"—";
+        const pct=pos? Math.round(100*att/pos):0;
+        return {cedula:ced, nombre, att, pos, pct};
+      }).sort((a,b)=>b.pct-a.pct).slice(0,50);
+      const tbPct=$("#tbPctEst"); tbPct.innerHTML="";
+      pctRows.forEach((r,i)=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${i+1}</td><td>${r.cedula}</td><td>${r.nombre}</td><td>${r.att}</td><td>${r.pos}</td><td>${r.pct}%</td>`;
+        tbPct.appendChild(tr);
+      });
+
+      // Puntualidad por estudiante
+      const tol = F.tol ?? 5;
+      const pMap = {};
+      state.asisView.forEach(r=>{
+        const ts = r.timestamp instanceof Date ? r.timestamp : (r.timestamp ? new Date(r.timestamp) : null);
+        const schedMin = hhmmToMin(r.hora);
+        if(!ts || schedMin==null) return;
+        const delta = minutesOfDay(ts) - schedMin;
+        const k = norm(r.cedula)||"—";
+        const nm = norm(r.nombre)||"—";
+        pMap[k] = pMap[k] || {cedula:k, nombre:nm, ok:0, tot:0, lateSum:0, lateCnt:0};
+        pMap[k].tot++;
+        if(delta<=tol && delta>=-30) pMap[k].ok++;
+        if(delta>tol){ pMap[k].lateSum += delta; pMap[k].lateCnt++; }
+      });
+      const pArr = Object.values(pMap).map(o=>({
+        ...o, pct: o.tot? Math.round(100*o.ok/o.tot):0, lateAvg: o.lateCnt? Math.round(o.lateSum/o.lateCnt):0
+      })).sort((a,b)=> b.pct-a.pct).slice(0,50);
+      const tbP=$("#tbPuntEst"); tbP.innerHTML="";
+      pArr.forEach((r,i)=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${i+1}</td><td>${r.cedula}</td><td>${r.nombre}</td><td>${r.pct}%</td><td>${r.lateAvg}</td>`;
+        tbP.appendChild(tr);
+      });
+
+      // Top Equipos
+      const eqMap = {};
+      state.usoView.forEach(x=>{
+        const cod = norm(x.equipo_codigo)||"—";
+        const dmin = diffMin(x.reserva_hora_inicio, x.reserva_hora_fin);
+        eqMap[cod] = eqMap[cod] || {codigo:cod, nombre:norm(x.equipo_nombre)||"—", marca:norm(x.equipo_marca)||"", modelo:norm(x.equipo_modelo)||"", cnt:0, mins:[]};
+        eqMap[cod].cnt += 1;
+        if(dmin!=null && dmin>=0) eqMap[cod].mins.push(dmin);
+      });
+      const eqArr = Object.values(eqMap).map(e=>{
+        const avg = e.mins.length ? Math.round(e.mins.reduce((a,b)=>a+b,0)/e.mins.length) : 0;
+        return {...e, avg};
+      }).sort((a,b)=> b.cnt-a.cnt).slice(0,50);
+      const tb3=$("#tbTopEquipos"); tb3.innerHTML="";
+      eqArr.forEach((r,i)=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${i+1}</td><td>${r.codigo}</td><td>${r.nombre}</td><td>${r.marca}</td><td>${r.modelo}</td><td>${r.cnt}</td><td>${r.avg}</td>`;
+        tb3.appendChild(tr);
+      });
+    }
+
+    // ===== Export =====
+    function aoaToSheet(name, rows, wb){ const ws = XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb, ws, name); }
+    function dlWorkbook(filename, wb){ XLSX.writeFile(wb, filename); }
+
+    function exportAsistenciasFiltro(){
+      const rows = [["#","Fecha","Hora","Cédula","Nombre","Ciclo","Asignatura","Profesor","Tipo","Timestamp"]];
+      state.asisView.forEach((r,i)=>{
+        const ts = r.timestamp instanceof Date ? r.timestamp.toLocaleString() : (norm(r.timestamp)||"");
+        rows.push([i+1, r.fecha, r.hora, r.cedula, r.nombre, r.ciclo, r.asignatura, r.profesor, r.tipo, ts]);
+      });
+      const wb = XLSX.utils.book_new(); aoaToSheet("Asistencias", rows, wb); dlWorkbook("Asistencias_Filtro.xlsx", wb);
+    }
+
+    function exportUsoFiltro(){
+      const rows = [["#","Fecha","Hora","Cédula","Nombre","Equipo Código","Equipo Nombre","Marca","Modelo","Reserva Inicio","Reserva Fin","Duración (min)","Timestamp"]];
+      state.usoView.forEach((r,i)=>{
+        const ts = r.timestamp instanceof Date ? r.timestamp.toLocaleString() : (norm(r.timestamp)||"");
+        const dur = diffMin(r.reserva_hora_inicio, r.reserva_hora_fin);
+        rows.push([i+1, r.fecha, r.hora, r.cedula, r.nombre, r.equipo_codigo, r.equipo_nombre, r.equipo_marca, r.equipo_modelo, r.reserva_hora_inicio, r.reserva_hora_fin, dur!=null?dur:"", ts]);
+      });
+      const wb = XLSX.utils.book_new(); aoaToSheet("UsoEquipos", rows, wb); dlWorkbook("UsoEquipos_Filtro.xlsx", wb);
+    }
+
+    function exportResumenes(){
+      const wb = XLSX.utils.book_new();
+      const asis = state.asisView, uso  = state.usoView, tol  = Math.max(0, toInt($("#tolMin")?.value||"5",5));
+
+      const grp = (arr, key) => Object.entries(groupBy(arr, x=>norm(x[key])||"—")).map(([k,v])=>[k, v.length]);
+      aoaToSheet("Asis_x_Asignatura", [["Asignatura","Asistencias"], ...grp(asis,"asignatura").sort((a,b)=>b[1]-a[1])], wb);
+      aoaToSheet("Asis_x_Profesor",   [["Profesor","Asistencias"],   ...grp(asis,"profesor").sort((a,b)=>b[1]-a[1])], wb);
+      aoaToSheet("Asis_x_Ciclo",      [["Ciclo","Asistencias"],      ...grp(asis,"ciclo").sort((a,b)=>a[0].localeCompare(b[0],'es',{numeric:true}))], wb);
+
+      const sesMap = groupBy(asis, x=>`${x.fecha}||${x.asignatura}||${x.hora}||${x.profesor}||${x.ciclo}`);
+      const sesArr = Object.entries(sesMap).map(([k,v])=>{ const [fecha,asig,hora,prof,ciclo]=k.split("||"); return [fecha,asig,prof,ciclo,hora,v.length]; })
+        .sort((a,b)=>(a[0]+a[4]).localeCompare(b[0]+b[4]));
+      aoaToSheet("Sesiones", [["Fecha","Asignatura","Profesor","Ciclo","Hora","Asistentes"], ...sesArr], wb);
+
+      const byDay = Object.entries(groupBy(asis, x=>x.fecha||"—")).map(([d,arr])=>[d, arr.length]).sort((a,b)=>a[1]-b[1]).slice(0,20);
+      aoaToSheet("Fechas_criticas", [["Fecha","Total"], ...byDay], wb);
+
+      const asisP = asis.map(r=>{
+        const ts = r.timestamp instanceof Date ? r.timestamp : (r.timestamp ? new Date(r.timestamp) : null);
+        const sm = hhmmToMin(r.hora); const delta = (ts && sm!=null)? (minutesOfDay(ts)-sm): null;
+        return {...r, delta};
+      }).filter(x=>x.delta!=null);
+      const pctBy = (key)=>Object.entries(groupBy(asisP, x=>norm(x[key])||"—"))
+        .map(([k,v])=>{ const ok=v.filter(z=>z.delta<=tol && z.delta>=-30).length; return [k, v.length? Math.round(100*ok/v.length):0]; })
+        .sort((a,b)=>b[1]-a[1]);
+      aoaToSheet("Puntualidad_x_Asign", [["Asignatura","% a tiempo (tol "+tol+")"], ...pctBy("asignatura")], wb);
+      aoaToSheet("Puntualidad_x_Prof",  [["Profesor","% a tiempo (tol "+tol+")"], ...pctBy("profesor")], wb);
+
+      const combosAll = groupBy(asis, x=>`${x.asignatura}||${x.profesor}||${x.ciclo}`);
+      const combosCount = Object.fromEntries(Object.entries(combosAll).map(([k,v])=>[k, new Set(v.map(x=>`${x.fecha}||${x.hora}`)).size]));
+      const estToCombos = {}, estToSessionsAtt = {};
+      asis.forEach(x=>{
+        const kEst=norm(x.cedula)||"—", combo=`${x.asignatura}||${x.profesor}||${x.ciclo}`;
+        (estToCombos[kEst]||(estToCombos[kEst]=new Set())).add(combo);
+        (estToSessionsAtt[kEst]||(estToSessionsAtt[kEst]=new Set())).add(`${combo}||${x.fecha}||${x.hora}`);
+      });
+      const pctRows = Object.keys(estToCombos).map(ced=>{
+        const combos=Array.from(estToCombos[ced]); const pos=combos.reduce((a,c)=>a+(combosCount[c]||0),0);
+        const att=(estToSessionsAtt[ced]||new Set()).size;
+        const nombre=(asis.find(x=>norm(x.cedula)===ced)?.nombre)||"—";
+        const pct=pos? Math.round(100*att/pos):0;
+        return [ced, nombre, att, pos, pct+"%"];
+      }).sort((a,b)=>parseInt(b[4])-parseInt(a[4]));
+      aoaToSheet("Pct_Asistencia_Est", [["Cedula","Nombre","Ses. asistidas","Ses. posibles","%"], ...pctRows], wb);
+
+      const byEq = Object.entries(groupBy(uso, x=>norm(x.equipo_codigo)||"—"))
+        .map(([k,v])=>{ const a=v[0]||{}; return [k, norm(a.equipo_nombre)||"—", norm(a.equipo_marca)||"", norm(a.equipo_modelo)||"", v.length]; })
+        .sort((a,b)=>b[4]-a[4]);
+      aoaToSheet("Uso_x_Equipo", [["Código","Nombre","Marca","Modelo","Sesiones"], ...byEq], wb);
+
+      const byEqDur = Object.entries(groupBy(uso, x=>norm(x.equipo_codigo)||"—"))
+        .map(([k,arr])=>{
+          const mins = arr.map(z=>diffMin(z.reserva_hora_inicio, z.reserva_hora_fin)).filter(m=>m!=null && m>=0);
+          const avg = mins.length ? Math.round(mins.reduce((a,b)=>a+b,0)/mins.length) : 0;
+          const any = arr[0]||{};
+          return [k, norm(any.equipo_nombre)||"—", norm(any.equipo_marca)||"", norm(any.equipo_modelo)||"", avg];
+        }).sort((a,b)=>b[4]-a[4]);
+      aoaToSheet("DuracionProm_x_Equipo", [["Código","Nombre","Marca","Modelo","Duración prom. (min)"], ...byEqDur], wb);
+
+      const allDays = {}; asis.forEach(x=>allDays[x.fecha]=allDays[x.fecha]||{a:0,u:0}); uso.forEach(x=>allDays[x.fecha]=allDays[x.fecha]||{a:0,u:0});
+      asis.forEach(x=>allDays[x.fecha].a+=1); uso.forEach(x=>allDays[x.fecha].u+=1);
+      const rowsTrend = [["Fecha","Asistencias","UsoEquipos"]]; Object.keys(allDays).sort().forEach(d=>rowsTrend.push([d, allDays[d].a, allDays[d].u]));
+      aoaToSheet("TendenciaDiaria", rowsTrend, wb);
+
+      dlWorkbook("Resumenes_Reportes.xlsx", wb);
+    }
+
+    // ===== Visibilidad por pestaña =====
+    function updateFilterVisibility(){
+      const show = (sel, vis) => $$(sel).forEach(el=> el.style.display = vis?"":"none");
+      if(activeTab==='asis'){
+        $("#selTipoRegistro").value="asistencias";
+        // mostrar solo-asis
+        show(".only-asis", true); show(".only-uso", false);
+      }else if(activeTab==='equipos'){
+        $("#selTipoRegistro").value="uso_libre";
+        show(".only-asis", false); show(".only-uso", true);
+      }else{
+        $("#selTipoRegistro").value="";
+        show(".only-asis", false); show(".only-uso", false);
+      }
+      // limpiar filtros ocultos para que no afecten
+      if(getComputedStyle($("#selProf")).display==="none"){
+        ["selTipoAsis","selCiclo","selAsig","selProf","cedula","tolMin"].forEach(id=>{ const el=$("#"+id); if(el){ if(id==="tolMin") el.value="5"; else el.value=""; }});
+      }
+      if(getComputedStyle($("#eqCodigo")).display==="none"){
+        ["eqCodigo","eqNombre","eqMarca","eqModelo"].forEach(id=>{ const el=$("#"+id); if(el) el.value=""; });
+      }
+    }
+
+   // ************************************************************
+    // 3. BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN
+    // ************************************************************
+    const auth = firebase.auth(); // Se inicializa Auth
+
+    auth.onAuthStateChanged(async (user) => {
+        
+        // 1. Si NO hay usuario logueado, redirigir al login
+        if (!user) {
+            window.location.href = "login.html"; 
+            return;
+        }
+
+        // 2. Usuario logueado: Verificar si su UID existe en la colección 'supervisores'
+        try {
+            const userUid = user.uid;
+            
+            // Reutilizamos 'db' que ya fue inicializado arriba
+            const supervisorDoc = await db.collection("supervisores").doc(userUid).get();
+
+            if (supervisorDoc.exists) {
+                // 🔑 ACCESO CONCEDIDO
+                document.body.style.display = 'block'; // 🟢 Mostrar la página
+                
+                // 📞 LLAMAR a la función que inicia toda la lógica de la página
+                inicializarReportes(); 
+                
+            } else {
+                // Acceso denegado: Logueado, pero no es supervisor
+                alert("Acceso denegado. No tienes permisos de supervisor.");
+                auth.signOut();
+                window.location.href = "login.html";
+            }
+
+        } catch (error) {
+            console.error("Error verificando supervisor:", error);
+            alert("Ocurrió un error en la verificación de seguridad.");
+            auth.signOut();
+            window.location.href = "login.html";
+        }
+    });
+
+   
+
+     
+  </script>
+</body>
+</html>

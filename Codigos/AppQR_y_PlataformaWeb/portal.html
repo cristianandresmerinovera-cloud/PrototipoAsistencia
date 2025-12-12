@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal | Laboratorio</title>
+  <link rel="icon" href="icono-app.png" type="image/png" />
+  <meta name="theme-color" content="#1d70b8" />
+
+  <!-- Firebase (compat v9) -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root{
+      --bg:#f3f6fb;
+      --panel:#ffffff;
+      --muted:#475569;
+      --text:#0f172a;
+      --primary:#1d70b8;     /* celeste académico */
+      --primary-700:#155e96; /* celeste más oscuro */
+      --accent:#f59e0b;
+      --stroke:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 800px at 10% -10%, #eef2ff 0%, transparent 55%),
+        radial-gradient(900px 500px at 90% 10%, #e2e8f0 0%, transparent 50%),
+        var(--bg);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
+      color:var(--text);
+      display: none;
+    }
+    a{color:inherit;text-decoration:none}
+    .container{max-width:1200px;margin:0 auto;padding:20px}
+
+    /* Cinta celeste a todo lo ancho */
+    .topbar {
+      width: 100%;
+      border-radius: 0;
+      margin-bottom: 18px;
+      background-color: var(--primary);
+      color: #fff;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+      border-bottom: 3px solid var(--primary-700);
+    }
+    .topbar .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .brand {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 0;
+    }
+    .brand h1 {
+      font-size: 20px;
+      margin: 0;
+      font-weight: 800;
+      letter-spacing: .2px;
+      text-align: center;
+      color: #fff;
+    }
+    .brand p {
+      margin: 0;
+      color: #dbeafe;
+      font-size: 12px;
+      text-align: center;
+    }
+    .hdr-logo {
+      height: 54px;
+      width: auto;
+      object-fit: contain;
+      flex-shrink: 0;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--primary-700);
+      color: #fff;
+      font-size: 14px;
+    }
+    .chip small { color: #bfdbfe; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: none;
+      background: var(--primary-700);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: .15s;
+    }
+    .btn:hover { transform: translateY(-1px); background: #134e75; }
+    .btn.primary { background: linear-gradient(135deg,var(--primary),var(--primary-700)); color: #fff; }
+    .avatar{width:28px;height:28px;border-radius:999px;background:#f1f5f9;display:grid;place-items:center}
+
+    /* Hero */
+    .hero {
+      border:1px solid var(--stroke);
+      background:linear-gradient(180deg,#ffffff, #ffffffcc 70%, #ffffffb3), url('img/hero.png') center/cover no-repeat;
+      padding:24px;
+      border-radius:20px;
+      box-shadow:0 10px 30px rgba(0,0,0,.06);
+    }
+    .hero h2{margin:0 0 6px;font-size:28px;color:#1e3a8a}
+    .hero p{margin:0;color:var(--muted)}
+
+    /* Grid */
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:18px}
+    .card{
+      grid-column:span 6;
+      display:flex;flex-direction:column;justify-content:flex-end;
+      min-height:160px;position:relative;overflow:hidden;border-radius:18px;
+      border:1px solid var(--stroke);background:var(--panel);cursor:pointer;
+      transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+      box-shadow:0 4px 10px rgba(0,0,0,.05)
+    }
+    @media (min-width:900px){ .card{grid-column:span 3;} }
+    .card:hover{transform:translateY(-2px);border-color:#cbd5e1;box-shadow:0 12px 32px rgba(0,0,0,.12)}
+    .card__media{position:absolute;inset:0;opacity:.25;filter:saturate(1.08);background-position:center;background-size:cover}
+    .card__fade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%, rgba(0,0,0,.35) 100%)}
+    .card__content{position:relative;padding:14px}
+    .card__title{font-size:18px;font-weight:800;margin:0 0 4px;color:#1e40af}
+    .card__desc{margin:0;color:var(--muted);font-size:13px}
+    .card__badge{position:absolute;top:10px;left:10px;font-size:12px;background:#1e3a8a;color:#fff;border:1px solid #1e40af;border-radius:999px;padding:6px 10px}
+    .card__badge[data-variant="nuevo"]{background:#fde68a;color:#92400e;border-color:#fcd34d}
+
+    /* Footer */
+    footer{margin:24px auto 12px;max-width:1200px;color:var(--muted);font-size:12px;text-align:center}
+
+    /* Modal */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);padding:16px;z-index:50}
+    .modal.show{display:flex}
+    .modal__card{width:100%;max-width:420px;border-radius:18px;background:#fff;border:1px solid var(--stroke);box-shadow:0 20px 60px rgba(0,0,0,.15);overflow:hidden}
+    .modal__head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--stroke)}
+    .modal__body{padding:16px;display:grid;gap:12px}
+    .input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;color:var(--text)}
+    .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+    .link{color:var(--primary);font-size:12px}
+  </style>
+</head>
+<body>
+  <!-- Cinta -->
+  <header class="topbar">
+    <div class="container">
+      <img class="hdr-logo" src="logounl.png" alt="Logo UNL" />
+      <div class="brand">
+        <h1>Portal de Laboratorio</h1>
+        <p>Supervisión • Asistencias • Equipos • Estudiantes</p>
+      </div>
+      <img class="hdr-logo" src="logocit.png" alt="Logo CIT" />
+
+      <div class="actions">
+        <div class="chip" id="sessionChip">
+          <small>Sesión:</small>
+          <strong id="sessionState">Invitado</strong>
+        </div>
+        <button class="btn" id="btnPerfil" title="Perfil">
+          <span class="avatar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+              xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4" stroke="#bfdbfe"/>
+              <path d="M4 20c1.5-4 6.5-4 8-4s6.5 0 8 4" stroke="#bfdbfe"/>
+            </svg>
+          </span>
+          <span id="perfilText">Perfil</span>
+        </button>
+        <button class="btn primary" id="btnLogin">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 3h4v18h-4" stroke="white"/>
+            <path d="M10 17l5-5-5-5" stroke="white"/>
+          </svg>
+          <span id="loginText">Iniciar sesión</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <section class="hero">
+      <h2>¡Bienvenido!</h2>
+      <p>Accede a los módulos principales desde aquí. Si aún no has iniciado sesión, se te pedirá al intentar entrar.</p>
+    </section>
+
+    <main class="grid">
+      <!-- 1) Horarios y Asistencias -->
+      <article class="card portal" data-url="hora.html" data-requires-auth="true">
+<div class="card__media" style="background-image:url('img/hora.png')"></div>
+        <div class="card__fade"></div>
+        <div class="card__badge">Principal</div>
+        <div class="card__content">
+          <h3 class="card__title">Horarios y Asistencias</h3>
+          <p class="card__desc">Gestiona horarios, marca y consulta asistencias.</p>
+        </div>
+      </article>
+
+      <!-- 2) Equipos y Reservas -->
+      <article class="card portal" data-url="equipos.html" data-requires-auth="true">
+        <div class="card__media" style="background-image:url('img/equipos.png')"></div>
+
+        <div class="card__fade"></div>
+        <div class="card__badge">Principal</div>
+        <div class="card__content">
+          <h3 class="card__title">Equipos y Reservas</h3>
+          <p class="card__desc">Disponibilidad, préstamos y reservas rápidas.</p>
+        </div>
+      </article>
+
+      <!-- 3) Lista de Estudiantes (NUEVO) -->
+      <article class="card portal" data-url="estudiantes.html" data-requires-auth="true">
+<div class="card__media" style="background-image:url('img/estudiantes.png')"></div>
+        <div class="card__fade"></div>
+        <div class="card__badge">Principal</div>
+        <div class="card__content">
+          <h3 class="card__title">Lista de Estudiantes</h3>
+          <p class="card__desc">Consulta y búsqueda avanzada de estudiantes.</p>
+        </div>
+      </article>
+
+      <!-- 4) Registro de Estudiantes -->
+      <article class="card portal" data-url="registro.html" data-requires-auth="true">
+<div class="card__media" style="background-image:url('img/registro.png')"></div>
+        <div class="card__fade"></div>
+        <div class="card__badge">Principal</div>
+        <div class="card__content">
+          <h3 class="card__title">Registro de Estudiantes</h3>
+          <p class="card__desc">Alta, edición y asignación a grupos.</p>
+        </div>
+      </article>
+
+      <!-- 5) Reportes y Estadísticas -->
+      <article class="card portal" data-url="reportes.html" data-requires-auth="true">
+<div class="card__media" style="background-image:url('img/reportes.png')"></div>
+        <div class="card__fade"></div>
+        <div class="card__badge" data-variant="nuevo">Nuevo</div>
+        <div class="card__content">
+          <h3 class="card__title">Reportes y Estadísticas</h3>
+          <p class="card__desc">Asistencia, uso de equipos y tendencias.</p>
+        </div>
+      </article>
+
+      <!-- 6) Recursos y Documentación (NUEVO) -->
+      <article class="card portal" data-url="recursos.html" data-requires-auth="true">
+<div class="card__media" style="background-image:url('img/recursos.png')"></div>
+        <div class="card__fade"></div>
+        <div class="card__badge" data-variant="nuevo">Nuevo</div>
+        <div class="card__content">
+          <h3 class="card__title">Recursos y Documentación</h3>
+          <p class="card__desc">Manuales, normas del laboratorio y guías rápidas.</p>
+        </div>
+      </article>
+    </main>
+  </div>
+
+  <footer>
+    © <span id="year"></span> Laboratorio. Todos los derechos reservados.
+  </footer>
+
+  <!-- Modal Login -->
+  <div class="modal" id="loginModal" aria-hidden="true">
+    <div class="modal__card" role="dialog" aria-modal="true">
+      <div class="modal__head">
+        <strong>Iniciar sesión</strong>
+        <button class="btn" id="btnCerrarModal" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal__body">
+        <label>
+          <small>Usuario o correo</small>
+          <input class="input" id="identificador" type="text" placeholder="usuario o usuario@institucion.edu" />
+        </label>
+        <label>
+          <small>Contraseña</small>
+          <input class="input" id="pass" type="password" placeholder="••••••••" />
+        </label>
+        <div class="row">
+          <a class="link" href="#" id="recuperar">¿Olvidaste tu contraseña?</a>
+          <button class="btn primary" id="btnConfirmarLogin">Entrar</button>
+        </div>
+        <small style="color:var(--muted)">Debes tener cuenta creada en <strong>supervisores</strong> (activo y rol supervisor).</small>
+      </div>
+    </div>
+  </div>
+
+ <script>
+    // ========= Firebase =========
+    const firebaseConfig = {
+      apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+      authDomain: "escaner-qr-d7d65.firebaseapp.com",
+      projectId: "escaner-qr-d7d65",
+      storageBucket: "escaner-qr-d7d65.appspot.com",
+      messagingSenderId: "982923527298",
+      appId: "1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db   = firebase.firestore();
+
+    // ========= Utilidades sesión local (Se mantienen para uso interno) =========
+    const isLoggedIn = () => localStorage.getItem('sesion') === 'on';
+    const setLoggedIn = (v) => localStorage.setItem('sesion', v ? 'on' : 'off');
+    const setProfile = (obj) => localStorage.setItem('perfil', JSON.stringify(obj || {}));
+    const getProfile = () => { try{ return JSON.parse(localStorage.getItem('perfil')||'{}'); }catch{return {}} };
+
+    // ========= UI refs =========
+    document.getElementById('year').textContent = new Date().getFullYear();
+    const loginModal = document.getElementById('loginModal');
+    const btnLogin = document.getElementById('btnLogin');
+    const btnPerfil = document.getElementById('btnPerfil');
+    const btnCerrarModal = document.getElementById('btnCerrarModal');
+    const btnConfirmarLogin = document.getElementById('btnConfirmarLogin');
+    const sessionState = document.getElementById('sessionState');
+    const perfilText = document.getElementById('perfilText');
+    const loginText = document.getElementById('loginText');
+
+    function renderSession(){
+      const p = getProfile();
+      if(isLoggedIn()){
+        sessionState.textContent = 'Activa';
+        perfilText.textContent = p?.nombre ? p.nombre : 'Perfil';
+        loginText.textContent = 'Cerrar sesión';
+        btnLogin.classList.remove('primary');
+      } else {
+        sessionState.textContent = 'Invitado';
+        perfilText.textContent = 'Perfil';
+        loginText.textContent = 'Iniciar sesión';
+        btnLogin.classList.add('primary');
+      }
+    }
+    function openModal(){ loginModal.classList.add('show'); loginModal.setAttribute('aria-hidden','false'); }
+    function closeModal(){ loginModal.classList.remove('show'); loginModal.setAttribute('aria-hidden','true'); }
+
+    // ========= Resolver email desde usuario o correo =========
+    async function resolveEmailFromIdentifier(identifier){
+      const id = (identifier||'').trim();
+      if(!id) throw new Error('Ingresa usuario o correo');
+      if(id.includes('@')) return id; // ya es correo
+
+      // Buscar en colección 'supervisores' por usernameLower
+      const uname = id.toLowerCase();
+      const q = await db.collection('supervisores')
+        .where('usernameLower','==',uname)
+        .where('activo','==',true)
+        .limit(1)
+        .get();
+
+      if(q.empty) throw new Error('Usuario no encontrado o inactivo');
+      const doc = q.docs[0].data();
+      if(!doc.correo_personal) throw new Error('Supervisor sin correo registrado');
+      return doc.correo_personal;
+    }
+
+    // ========= Verificar que el usuario logueado sea supervisor activo =========
+    async function verifySupervisor(user){
+      const uid = user?.uid;
+      if(!uid) return false;
+
+      const ref = db.collection('supervisores').doc(uid);
+      const snap = await ref.get();
+      if(!snap.exists) return false;
+
+      const data = snap.data();
+      const ok = !!(data.activo === true && data.role === 'supervisor');
+      if(ok){
+        setProfile({
+          uid,
+          nombre: data.nombre || 'Supervisor',
+          username: data.username || '',
+          correo: data.correo_personal || user.email || '',
+          fotoBase64: data.fotoBase64 || ''
+        });
+      }
+      return ok;
+    }
+
+// ----------------------------------------------------
+// 🛑 Bloque de seguridad estricta (MANTENER ESTE)
+// ----------------------------------------------------
+  auth.onAuthStateChanged(async user => {
+    const ok = await verifySupervisor(user);
+    
+    // Si no está autorizado o no hay usuario, redirige inmediatamente.
+    if(!ok){
+      window.location.href = "login.html";
+      return; // Detener ejecución.
+    }
+
+    // Si es supervisor activo, actualiza la sesión y muestra el contenido.
+    setLoggedIn(true);
+    renderSession();
+    // Opcional: Mostrar el body si estaba oculto por CSS
+    document.body.style.display = 'block'; 
+  });
+// ----------------------------------------------------
+// 🛑 Fin Bloque de seguridad estricta
+// ----------------------------------------------------
+
+    // ========= Eventos (se mantienen, solo necesitamos que funcionen 'Cerrar Sesión' y el Modal) =========
+    btnLogin.addEventListener('click', async () => {
+      if(isLoggedIn()){
+        // Cerrar sesión completa
+        try { await auth.signOut(); } catch(e){}
+        setLoggedIn(false); setProfile({});
+        renderSession();
+        // Redirigir después de cerrar sesión, ya que el portal requiere supervisor.
+        window.location.href = "login.html"; 
+      } else {
+        openModal();
+      }
+    });
+
+    btnPerfil.addEventListener('click', () => {
+      if(isLoggedIn()){
+        // window.location.href = 'perfil.html'; // opcional
+        alert('Sesión activa: ' + (getProfile().nombre || 'Supervisor'));
+      } else {
+        openModal();
+      }
+    });
+
+    btnCerrarModal.addEventListener('click', closeModal);
+    loginModal.addEventListener('click', (e)=>{ if(e.target === loginModal) closeModal(); });
+
+    btnConfirmarLogin.addEventListener('click', async () => {
+      const idEl = document.getElementById('identificador');
+      const passEl  = document.getElementById('pass');
+      const ident = idEl.value.trim();
+      const pass  = passEl.value.trim();
+
+      if(!ident || !pass){ alert('Completa usuario/correo y contraseña'); return; }
+
+      try{
+        const email = await resolveEmailFromIdentifier(ident);
+        const cred  = await auth.signInWithEmailAndPassword(email, pass);
+        const okSupervisor = await verifySupervisor(cred.user);
+        if(!okSupervisor){
+          await auth.signOut();
+          throw new Error('No autorizado: tu cuenta no es supervisor activo.');
+        }
+        setLoggedIn(true);
+        renderSession();
+        closeModal();
+        // Recarga la página después de iniciar sesión para re-validar la seguridad estricta
+        window.location.reload(); 
+      }catch(err){
+        alert('Error de inicio de sesión: ' + (err?.message || err));
+      }
+    });
+
+    // ========= Navegación con guardia de sesión (se mantiene) =========
+    document.querySelectorAll('.portal').forEach(card => {
+      card.addEventListener('click', () => {
+        const url = card.dataset.url;
+        // Puesto que la página misma ya exige ser supervisor, la guardia en la tarjeta ya no es estrictamente necesaria, 
+        // pero la mantenemos por si decides relajar la seguridad de la página principal más adelante.
+        url && (window.location.href = url);
+      });
+    });
+    
+    // 🛑 SE ELIMINA EL BLOQUE FINAL 'auth.onAuthStateChanged' (Estado inicial) para evitar duplicidad y garantizar que el primer bloque de redirección estricta tome el control.
+    
+</script>
+</body>
+</html>

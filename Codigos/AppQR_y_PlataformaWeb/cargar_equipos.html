@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cargar Equipos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Firebase compat v9 -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <!-- SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+
+  <style>
+    :root{
+      --brand:#2563eb;
+      --brand-600:#1e40af;
+      --ink:#0f172a;
+      --muted:#475569;
+      --bg:#f8fafc;
+      --card:#ffffff;
+      --surface:#f1f5f9;
+      --stroke:#d1d5db;
+      --tableRow:#f9fafb;
+      --chip:#eef2ff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; padding:24px;
+      font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      color:var(--ink); background:var(--bg);
+      display: none;
+    }
+    .container{max-width:1100px;margin:0 auto}
+    /* Header */
+    .hero{
+      display:flex; align-items:center; gap:16px; margin-bottom:18px;
+      background: var(--surface);
+      border:1px solid var(--stroke); border-radius:20px; padding:16px 18px;
+    }
+    .logo{
+      width:56px;height:56px;border-radius:12px;
+      background: var(--chip);
+      display:grid;place-items:center;
+      border:1px solid var(--stroke);
+    }
+    .logo img{width:40px;height:40px;object-fit:contain}
+    .hero-text{flex:1}
+    .hero h1{
+      margin:0; font-size: clamp(20px, 2.4vw, 28px); letter-spacing:.2px;
+      color:var(--brand-600);
+    }
+    .hero p{margin:4px 0 0; color:var(--muted); font-size:14px}
+    .badge{
+      padding:6px 10px;border-radius:999px;font-size:12px;
+      background: var(--chip); color:var(--brand-600); border:1px solid var(--stroke);
+      white-space:nowrap
+    }
+    /* Card */
+    .card{
+      background: var(--card);
+      border:1px solid var(--stroke);
+      border-radius:18px; padding:18px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,.05);
+    }
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+    input[type="file"]{
+      padding:10px 12px;border:1px dashed var(--stroke);
+      border-radius:12px;background:var(--surface);color:var(--ink)
+    }
+    button{
+      border:0;padding:10px 14px;border-radius:12px;cursor:pointer;
+      background:var(--brand);color:#fff;font-weight:600;
+      box-shadow: 0 4px 10px rgba(37,99,235,.15);
+      transition: transform .06s ease, box-shadow .2s ease;
+    }
+    button:hover{transform: translateY(-1px); box-shadow:0 8px 16px rgba(37,99,235,.25)}
+    button.secondary{
+      background:var(--surface);color:var(--brand-600);
+      border:1px solid var(--stroke); box-shadow:none
+    }
+    .pill{
+      background:var(--chip);color:var(--brand-600);border-radius:999px;padding:6px 12px;
+      border:1px solid var(--stroke)
+    }
+    /* Status bar */
+    #estado{
+      font-size:14px;color:var(--muted);margin-left:6px
+    }
+    /* Table */
+    table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border:1px solid var(--stroke);border-radius:14px;overflow:hidden}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--stroke);font-size:14px;text-align:left}
+    thead th{
+      background: var(--chip);
+      color:var(--brand-600); font-weight:700;
+    }
+    tbody tr:nth-child(odd){background:var(--tableRow)}
+    /* Log */
+    #log{
+      white-space:pre-wrap;background:var(--surface);color:var(--ink);padding:14px;border-radius:14px;margin-top:14px;
+      max-height:260px;overflow:auto;font-size:.9rem;display:none;
+      border:1px solid var(--stroke)
+    }
+    /* Footer */
+    .footer{
+      margin-top:16px; color:var(--muted);font-size:12px;text-align:center
+    }
+    @media (max-width:640px){
+      .hero{flex-direction:column;align-items:flex-start}
+      .row{gap:8px}
+      button, input[type="file"]{width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="hero">
+      <div class="logo">
+        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f4be.svg" alt="Logo izquierda">
+      </div>
+      <div class="hero-text">
+        <h1>Cargar equipos por Excel</h1>
+        <p>Cabeceras esperadas (en cualquier columna): <b>Codigo</b>, <b>Nombre</b>, <b>Marca</b>, <b>Modelo</b>, <b>Serie</b>.</p>
+      </div>
+      <span class="badge">Inventario • Firestore</span>
+      <div class="logo">
+        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f4c8.svg" alt="Logo derecha">
+      </div>
+      <button style="position:absolute; top:8px; right:8px;" 
+          onclick="firebase.auth().signOut().then(() => { window.location.href = 'login.html'; })"
+          title="Cerrar sesión de supervisor">
+          🚪 Cerrar Sesión
+      </button>
+    </div>
+
+    <!-- Card -->
+    <div class="card">
+      <div class="row">
+        <input id="archivo" type="file" accept=".xlsx,.xls" />
+        <button id="btnLeer">Leer Excel</button>
+        <button id="btnLimpiar" class="secondary">Limpiar</button>
+        <span id="contar" class="pill">0 filas</span>
+      </div>
+
+      <div id="preview"></div>
+
+      <div class="row">
+        <button id="btnSubir">Subir a Firestore</button>
+        <span id="estado"></span>
+      </div>
+
+      <div id="log"></div>
+    </div>
+
+    <div class="footer">
+      © <span id="y"></span> • Panel de carga de equipos · Versión clara
+    </div>
+  </div>
+
+<script>
+  const firebaseConfig = {
+    apiKey:"AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+    authDomain:"escaner-qr-d7d65.firebaseapp.com",
+    projectId:"escaner-qr-d7d65",
+    storageBucket:"escaner-qr-d7d65.appspot.com",
+    messagingSenderId:"982923527298",
+    appId:"1:982923527298:web:df13850f38d847cfdae09b"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  const $ = s => document.querySelector(s);
+  const clean = v => (v === undefined || v === null) ? "" : String(v).trim();
+  const norm = s => clean(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+
+  const EXPECTED = {
+    codigo: ["codigo","código","code","id"],
+    nombre: ["nombre"],
+    marca:  ["marca"],
+    modelo: ["modelo","model"],
+    serie:  ["serie","nserie","numserie","número de serie","numero de serie"]
+  };
+
+// ... (Tu código existente: funciones utilitarias y variables globales)
+
+// ===================================================
+// 📞 FUNCIÓN PRINCIPAL DE INICIALIZACIÓN DE LA PÁGINA
+// ===================================================
+function inicializarCarga() {
+   $("#y").textContent = new Date().getFullYear();
+
+  $("#btnLeer").addEventListener("click", async ()=>{
+    const file = $("#archivo").files[0];
+    if (!file){ alert("Selecciona un archivo Excel."); return; }
+
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const matrix = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+
+    const headerInfo = findHeaderPositions(matrix);
+    if (!headerInfo){
+      alert("No se encontraron cabeceras válidas (Codigo, Nombre, Marca, Modelo, Serie).");
+      return;
+    }
+
+    const { headerRow, cols } = headerInfo;
+    const startRow = headerRow + 1;
+
+    const tmp = [];
+    for (let r = startRow; r < matrix.length; r++){
+      const row = matrix[r] || [];
+      const obj = {
+        codigo: clean(row[cols.codigo]),
+        nombre: clean(row[cols.nombre]),
+        marca:  clean(row[cols.marca]),
+        modelo: clean(row[cols.modelo]),
+        serie:  clean(row[cols.serie]),
+        estado: "libre"
+      };
+      const hasAny = Object.values(obj).some(v => clean(v) !== "");
+      if (hasAny){
+        if (!obj.codigo) continue;
+        tmp.push(obj);
+      }
+    }
+
+    rows = tmp;
+    $("#contar").textContent = `${rows.length} filas`;
+    renderPreview(rows);
+    $("#estado").textContent = `Cabeceras detectadas en fila ${headerRow+1}. Leyendo desde fila ${startRow+1} hacia abajo.`;
+  });
+
+  $("#btnLimpiar").addEventListener("click", ()=>{
+    rows = [];
+    $("#archivo").value = "";
+    $("#contar").textContent = "0 filas";
+    $("#preview").innerHTML = "";
+    $("#estado").textContent = "";
+    $("#log").style.display = "none";
+    $("#log").textContent = "";
+  });
+
+  $("#btnSubir").addEventListener("click", async ()=>{
+    if (!rows.length){ alert("No hay datos para subir. Lee un Excel primero."); return; }
+    showLog();
+    $("#estado").textContent = "Subiendo…";
+
+    let creados=0, actualizados=0, errores=0;
+    for (let i=0; i<rows.length; i++){
+      const eq = rows[i];
+      const id = eq.codigo;
+      const ref = db.collection("equipos").doc(id);
+
+      try{
+        const snap = await ref.get();
+        if (snap.exists){
+          await ref.set(eq, { merge:true });
+          actualizados++;
+          logLine(`♻️ [${i+1}] Actualizado: ${id}`);
+        }else{
+          await ref.set(eq);
+          creados++;
+          logLine(`✅ [${i+1}] Creado: ${id}`);
+        }
+      }catch(e){
+        errores++;
+        logLine(`❌ [${i+1}] Error con ${id}: ${e.message}`);
+      }
+    }
+
+    $("#estado").textContent = `Listo. Creados: ${creados} · Actualizados: ${actualizados} · Errores: ${errores}`;
+  });
+}
+  
+  function findHeaderPositions(matrix){
+    for (let r = 0; r < Math.min(20, matrix.length); r++){
+      const row = matrix[r] || [];
+      const map = {};
+      Object.entries(EXPECTED).forEach(([std, variants])=>{
+        for (let c = 0; c < row.length; c++){
+          const header = norm(row[c]);
+          if (variants.includes(header)) { map[std] = c; break; }
+        }
+      });
+      if (["codigo","nombre","marca","modelo","serie"].every(k => map[k] !== undefined)){
+        return { headerRow: r, cols: map };
+      }
+    }
+    return null;
+  }
+
+  function renderPreview(rows){
+    if (!rows.length){ $("#preview").innerHTML = ""; return; }
+    let html = `<table><thead><tr>
+      <th>#</th><th>Código</th><th>Nombre</th><th>Marca</th><th>Modelo</th><th>Serie</th>
+    </tr></thead><tbody>`;
+    rows.forEach((r,i)=>{
+      html += `<tr>
+        <td>${i+1}</td><td>${r.codigo}</td><td>${r.nombre}</td>
+        <td>${r.marca}</td><td>${r.modelo}</td><td>${r.serie}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    $("#preview").innerHTML = html;
+  }
+
+  function showLog(){ const el=$("#log"); el.style.display="block"; el.textContent=""; return el; }
+  function logLine(msg){ const el=$("#log"); el.textContent += msg + "\n"; }
+
+  let rows = [];
+
+ 
+
+// ----------------------------------------------------
+// 🔑 BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN
+// ----------------------------------------------------
+const auth = firebase.auth();
+
+auth.onAuthStateChanged(async (user) => {
+    
+    // 1. Si NO hay usuario logueado, redirigir al login
+    if (!user) {
+        window.location.href = "login.html"; 
+        return;
+    }
+
+    // 2. Usuario logueado: Verificar si es supervisor
+    try {
+        const userUid = user.uid;
+        
+        const supervisorDoc = await db.collection("supervisores").doc(userUid).get();
+
+        if (supervisorDoc.exists) {
+            // 🔑 ACCESO CONCEDIDO
+            document.body.style.display = 'block'; // 🟢 Mostrar la página
+            
+            // 📞 LLAMAR a la función que inicia toda la lógica de la página
+            inicializarCarga(); // ⬅️ Llama a tu función
+            
+        } else {
+            // Acceso denegado: Logueado, pero no es supervisor
+            alert("Acceso denegado. No tienes permisos para administrar inventario.");
+            auth.signOut(); 
+            window.location.href = "login.html";
+        }
+
+    } catch (error) {
+        console.error("Error verificando supervisor:", error);
+        alert("Ocurrió un error en la verificación de seguridad.");
+        auth.signOut();
+        window.location.href = "login.html";
+    }
+});
+</script>
+</body>
+</html>

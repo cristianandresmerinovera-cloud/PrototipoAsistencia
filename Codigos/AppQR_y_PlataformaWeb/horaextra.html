@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Horario Extra (Sábados) - UNL</title>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <style>
+    body { font-family:'Segoe UI',sans-serif; margin:0; padding:20px; background:#f7f9fc; color:#222;
+  display: none; }
+    .encabezado { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; border-bottom:2px solid #ccc; margin-bottom:20px; }
+    .encabezado img { height:60px; }
+    .texto-centro { text-align:center; flex:1; padding:0 10px; font-size:14px; line-height:1.4; }
+    .texto-centro strong { display:block; font-size:16px; }
+    .horario-titulo { font-weight:bold; margin-top:5px; color:#004a99; }
+
+    .controls { margin:10px 0 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .controls label { font-weight:bold; }
+    .acciones { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .btn { display:inline-flex; align-items:center; gap:6px; background:#1976D2; color:#fff; border:none; padding:8px 12px; font-size:14px; border-radius:6px; cursor:pointer; }
+    .btn.secondary { background:#43A047; }
+    .btn.warn { background:#f39c12; }
+    .btn:hover { filter:brightness(1.05); }
+
+    #bannerEdicion { display:none; background:#fff3cd; color:#664d03; border:1px solid #ffecb5; padding:10px 12px; border-radius:6px; font-size:14px; margin-bottom:10px; }
+    #bannerEdicion strong { margin-right:10px; }
+
+    table { border-collapse:collapse; width:100%; background:#fff; border:1px solid #aaa; box-shadow:0 2px 8px rgba(0,0,0,.1); table-layout:fixed; }
+    th, td { border:1px solid #ccc; padding:8px; text-align:center; min-width:120px; white-space:pre-line; font-size:13px; }
+    th { background:#004a99; color:#fff; }
+    td.boton { background:#cce5ff; cursor:pointer; }
+    td:hover { background:#e6f0ff; }
+
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); justify-content:center; align-items:center; z-index:1000; }
+    .modal-content { background:#fff; padding:20px; border-radius:8px; width:420px; max-width:92vw; box-shadow:0 2px 10px rgba(0,0,0,.3); }
+    .modal-content h3 { margin:0 0 8px 0; }
+    .field { margin-top:10px; }
+    .field label { display:block; font-size:13px; font-weight:600; margin-bottom:4px; }
+    input, select { width:100%; padding:8px; font-size:1em; box-sizing:border-box; }
+    .modal-buttons { display:flex; gap:10px; justify-content:space-between; margin-top:15px; }
+    .subtle { font-size:12px; color:#666; }
+  </style>
+</head>
+<body>
+  <div class="encabezado">
+    <img src="logounl.png" alt="Logo UNL" />
+    <div class="texto-centro">
+      <strong>UNIVERSIDAD NACIONAL DE LOJA</strong>
+      ÁREA DE LA ENERGÍA, LAS INDUSTRIAS Y LOS RECURSOS NATURALES NO RENOVABLES<br />
+      CARRERA: TELECOMUNICACIONES<br />
+      <div class="horario-titulo">Horario Extra de Recuperación (Sólo Sábados)</div>
+    </div>
+    <img src="logocit.png" alt="Logo CIT" />
+  </div>
+<button id="btnLogout" class="btn-mini warn" onclick="firebase.auth().signOut().then(() => { window.location.href = 'login.html'; })">
+            🚪 Cerrar Sesión
+        </button>
+  <div class="controls">
+    <label>Selecciona sábado:
+      <input type="text" id="sabadoPicker" placeholder="Elige un sábado" />
+    </label>
+    <div id="fechaElegida" class="subtle"></div>
+
+    <div class="acciones">
+      <button class="btn" onclick="activarModoEdicion()">✏️ Editar horario</button>
+      <button class="btn secondary" onclick="desactivarModoEdicion()">✅ Terminar edición</button>
+    </div>
+  </div>
+
+  <div id="bannerEdicion">
+    <strong>🟡 Modo edición activo:</strong> haz clic en una celda para crear/editar bloques.
+  </div>
+
+  <table id="tablaExtra">
+    <thead>
+      <tr>
+        <th>Hora</th>
+        <th>Sábado</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- Modal con el MISMO formato del horario original -->
+  <div class="modal" id="modalHorario">
+    <div class="modal-content">
+      <h3>Definir clase</h3>
+
+      <div class="field">
+        <label for="inputCiclo">Ciclo</label>
+        <select id="inputCiclo">
+          <option value="">Selecciona ciclo...</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="inputAsignatura">Asignatura</label>
+        <select id="inputAsignatura">
+          <option value="">Selecciona asignatura...</option>
+          <!-- Se llena según ciclo desde clases_definidas. Incluye “OTRA ASIGNATURA…” -->
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Docente</label>
+        <input id="inputProfesorAuto" type="text" disabled />
+      </div>
+
+      <div class="field">
+        <label for="inputDuracion">Duración</label>
+        <select id="inputDuracion">
+          <option value="1">Duración: 1 hora</option>
+          <option value="2">Duración: 2 horas</option>
+          <option value="3">Duración: 3 horas</option>
+          <option value="4">Duración: 4 horas</option>
+        </select>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn" onclick="guardarHorarioModal()">Guardar</button>
+        <button class="btn warn" onclick="eliminarHorarioModal()">Eliminar</button>
+        <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      </div>
+      <div class="subtle">Se guardará sólo para el sábado seleccionado (07:00–21:00).</div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Firebase ----------
+    const firebaseConfig = {
+      apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+      authDomain: "escaner-qr-d7d65.firebaseapp.com",
+      projectId: "escaner-qr-d7d65",
+      storageBucket: "escaner-qr-d7d65.appspot.com",
+      messagingSenderId: "982923527298",
+      appId: "1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth(); // Referencia al módulo de Auth
+
+    // ---------- Variables globales y Refs DOM ----------
+    const ALL_ASIGNATURAS = [
+      "Matemática Discreta","Expresión Oral y Escrita","Cálculo de Una Variable","Física Básica","Álgebra Lineal",
+      "Fundamentos de Programación","Ecuaciones Diferenciales","Cálculo Multivariable","Interculturalidad","Física Aplicada",
+      "Probabilidad y Estadística","Circuitos Eléctricos","Electrónica Analógica y Digital","Ética Profesional","Teoría Electromagnética",
+      "Programación Aplicada","Señales y Sistemas","Procesos Estocásticos","Líneas de Transmisión","Comunicaciones Analógicas",
+      "Teoría de la Información","Sistemas Microprocesados","Innovación y Emprendimiento","Procesamiento Digital de Señales",
+      "Fundamentos de Redes de Datos","Electrónica de Alta Frecuencia","Comunicaciones Digitales","Ingeniería de Tráfico","Antenas",
+      "Comunicaciones Ópticas","Redes de Datos","Redes para el Desarrollo Comunitario","Sistemas Operativos",
+      "Fundamentos de Internet de las Cosas","Radiopropagación","Comunicaciones Unificadas","Ingeniería Económica",
+      "Metodología de la Investigación Científica","Comunicaciones Inalámbricas","Redes de Acceso","Internet de las Cosas",
+      "Proyecto de Titulación","Seguridad de Redes","Educación Ambiental","Marco Regulatorio de las Telecomunicaciones",
+      "Aplicaciones de Ciudades Inteligentes","Aplicaciones de Telecomunicaciones","Redes Celulares",
+      "Diseño, Administración y Gestión de Proyectos de Telecomunicaciones","Unidad de Integración Curricular"
+    ].map(s => s.toUpperCase());
+
+    const dias = ["sabado"];
+    const horas = generarHoras("07:00","21:00");
+    const tbody = document.querySelector("#tablaExtra tbody");
+
+    // Estado
+    let modoEdicion = false;
+    let celdaActual = null;
+    let fechaSabadoISO = null; // YYYY-MM-DD
+    const datosExtra = {}; // cache de documentos del sábado seleccionado
+    const clasesPorCiclo = {}; // cache { "5":[{asignatura, profesor}, ...] }
+
+    // Funciones expuestas globalmente (necesarias para los onclick)
+    window.cerrarSesion = cerrarSesion;
+    window.activarModoEdicion = activarModoEdicion;
+    window.desactivarModoEdicion = desactivarModoEdicion;
+    window.guardarHorarioModal = guardarHorarioModal;
+    window.eliminarHorarioModal = eliminarHorarioModal;
+    window.cerrarModal = cerrarModal;
+
+    // ---------- Función para cerrar sesión ----------
+    async function cerrarSesion() {
+        try {
+            await auth.signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error("Error al cerrar sesión:", error);
+            alert("Hubo un error al cerrar sesión. Intente de nuevo.");
+        }
+    }
+
+
+    // -------------------------------------------------------------------------------------
+    // 📞 FUNCIÓN DE INICIALIZACIÓN (Contiene TODA la lógica de la UI que debe ser protegida)
+    // -------------------------------------------------------------------------------------
+    function inicializarUI() {
+        
+        // ---------- Picker de sábados (INICIALIZACIÓN MOVIDA AQUÍ) ----------
+        const picker = flatpickr("#sabadoPicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: proximoSabado(new Date()),
+            enable: [date => date.getDay() === 6], // 6 = sábado
+            onChange: ([d]) => {
+                fechaSabadoISO = toISO(d);
+                document.getElementById("fechaElegida").textContent = formatearFechaLarga(d);
+                cargarTabla();
+            }
+        });
+
+        // Evento DOMContentLoaded simulado para la carga inicial
+        (async () => {
+            const d = picker.selectedDates[0] || proximoSabado(new Date());
+            fechaSabadoISO = toISO(d);
+            document.getElementById("fechaElegida").textContent = formatearFechaLarga(d);
+            
+            // Precarga de ciclos (cache)
+            // Se usa Promise.all para cargar en paralelo
+            await Promise.all(["1","2","3","4","5","6","7","8","9","10"].map(c => precargarClasesCiclo(c)));
+            
+            // Carga inicial de la tabla
+            await cargarTabla();
+
+            // Listeners de los selects del Modal (AHORA SE ASIGNAN DESPUÉS DE QUE EL DOM ESTÁ LISTO)
+            document.getElementById("inputCiclo").addEventListener("change", actualizarOpcionesAsignaturas);
+            document.getElementById("inputAsignatura").addEventListener("change", actualizarDocenteAuto);
+
+            // 💡 Mostrar el cuerpo de la página después de la autorización y la carga inicial
+            document.body.style.display = 'block';
+        })();
+    }
+
+
+    // ---------- Utilidades Fecha/Hora ----------
+    function generarHoras(desde,hasta){
+      const arr=[]; let [h1,m1]=desde.split(":").map(Number), [h2,m2]=hasta.split(":").map(Number);
+      let t=h1*60+m1, fin=h2*60+m2;
+      while(t<fin){ const H=Math.floor(t/60), M=t%60; arr.push(`${String(H).padStart(2,"0")}:${String(M).padStart(2,"0")}`); t+=60; }
+      return arr;
+    }
+    function sumarHoras(hora, n){ let [H,M]=hora.split(":").map(Number); H+=n; if(H>=24) H-=24; return `${String(H).padStart(2,"0")}:${String(M).padStart(2,"0")}`; }
+    function convertirHoraANum(h){ const [H,M]=h.split(":").map(Number); return H+M/60; }
+    function toISO(date){ const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,"0"), d=String(date.getDate()).padStart(2,"0"); return `${y}-${m}-${d}`; }
+    function formatearFechaLarga(date){ return date.toLocaleDateString("es-ES",{weekday:"long",year:"numeric",month:"long",day:"numeric"}); }
+    function proximoSabado(base){ const d=new Date(base); const diff=(6-d.getDay()+7)%7; d.setDate(d.getDate()+(diff===0?0:diff)); return d; }
+
+    // ---------- Render ----------
+    async function cargarTabla(){
+      tbody.innerHTML="";
+      for (const k in datosExtra) delete datosExtra[k];
+
+      // Cargar sólo documentos del sábado seleccionado
+      const snap = await db.collection("horario_extra").where("fecha","==",fechaSabadoISO).get();
+      snap.forEach(doc => datosExtra[doc.id] = doc.data());
+
+      const celdasOcupadas = new Set();
+
+      horas.forEach(hora=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${hora} - ${sumarHoras(hora, 1)}</td>`;
+
+        const celdaKey = `sabado_${hora}`;
+        if (celdasOcupadas.has(celdaKey)) {
+          // cubierta por rowspan previo
+        } else {
+          let bloque=null;
+          for (const id in datosExtra){
+            const b = datosExtra[id];
+            const inicio=convertirHoraANum(b.hora), fin=convertirHoraANum(b.hora_fin), hnum=convertirHoraANum(hora);
+            if (hnum>=inicio && hnum<fin){ bloque=b; break; }
+          }
+
+          const td=document.createElement("td");
+          td.dataset.dia="sabado";
+          td.dataset.hora=hora;
+
+          if (bloque){
+            const dur = convertirHoraANum(bloque.hora_fin) - convertirHoraANum(bloque.hora);
+            for (let i=0;i<dur;i++){ celdasOcupadas.add(`sabado_${sumarHoras(bloque.hora,i)}`); }
+            td.rowSpan=dur; td.classList.add("boton"); td.dataset.guardado="true";
+            td.innerText = `${(bloque.asignatura||"").toUpperCase()}\n${bloque.profesor||""}${bloque.ciclo?'\n'+bloque.ciclo:''}`;
+            td.onclick=()=>manejarClickCelda(td);
+          }else{
+            td.dataset.guardado="false"; td.innerText=""; td.onclick=()=>manejarClickCelda(td);
+          }
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      });
+    }
+
+    function manejarClickCelda(td){
+      if (modoEdicion || td.dataset.guardado==="false"){
+        abrirModal(td);
+      }else{
+        // Ir a asistencia.html
+        const dia="sabado", hora=td.dataset.hora;
+        const [y,m,d]=fechaSabadoISO.split("-");
+        const fechaParam=`${parseInt(d)}/${parseInt(m)}/${y}`;
+        window.open(`asistencia.html?dia=${dia}&hora=${hora}&fecha=${fechaParam}`,"_blank");
+      }
+    }
+
+    function activarModoEdicion(){ modoEdicion=true; document.getElementById("bannerEdicion").style.display="block"; alert("Modo edición activado. Haz clic en una celda para crear/editar."); }
+    function desactivarModoEdicion(){ modoEdicion=false; document.getElementById("bannerEdicion").style.display="none"; }
+
+    // ---------- Modal (idéntico flujo) ----------
+    let celdaEnEdicion=null;
+
+    async function abrirModal(td){
+      celdaEnEdicion=td;
+      document.getElementById("modalHorario").style.display="flex";
+
+      // Reset
+      document.getElementById("inputCiclo").value="";
+      document.getElementById("inputAsignatura").innerHTML=`<option value="">Selecciona asignatura...</option>`;
+      document.getElementById("inputProfesorAuto").value="";
+      document.getElementById("inputDuracion").value="1";
+
+      // Si hay bloque existente que inicie exactamente a esa hora, precargar
+      const existente = await obtenerClaseExacta(td);
+      if (existente){
+        document.getElementById("inputCiclo").value = existente.ciclo||"";
+        await actualizarOpcionesAsignaturas();
+        const sel = document.getElementById("inputAsignatura");
+        let found=false;
+        [...sel.options].forEach(op=>{ if (op.value===(existente.asignatura||"").toUpperCase()){ sel.value=op.value; found=true; }});
+        if (!found && existente.asignatura) {
+          sel.insertAdjacentHTML("beforeend", `<option value="${existente.asignatura}" selected>${existente.asignatura}</option>`);
+          // Si no está en clases_definidas, el profesor debe ser el guardado
+          document.getElementById("inputProfesorAuto").value = existente.profesor||"";
+        } else {
+          await actualizarDocenteAuto();
+        }
+        const dur = convertirHoraANum(existente.hora_fin)-convertirHoraANum(existente.hora);
+        document.getElementById("inputDuracion").value=String(dur);
+      }
+    }
+    function cerrarModal(){ document.getElementById("modalHorario").style.display="none"; }
+
+    async function obtenerClaseExacta(td){
+      const prefijo = `${fechaSabadoISO}_sabado_${td.dataset.hora}_`;
+      for (const id in datosExtra){ if (id.startsWith(prefijo)) return datosExtra[id]; }
+      return null;
+    }
+
+    async function guardarHorarioModal(){
+      const ciclo = document.getElementById("inputCiclo").value.trim();
+      const asigSel = document.getElementById("inputAsignatura").value;
+      const profesor = document.getElementById("inputProfesorAuto").value.trim();
+      const duracion = Number(document.getElementById("inputDuracion").value);
+
+      if (!ciclo){ alert("Selecciona el ciclo."); return; }
+      if (!asigSel){ alert("Selecciona la asignatura."); return; }
+      if (!profesor){ alert("No hay docente asociado a la asignatura en este ciclo."); return; }
+      if (duracion<1 || duracion>4){ alert("Duración inválida (1 a 4 horas)."); return; }
+      
+      // Eliminar el bloque que se sobreescribe para evitar conflictos
+      await eliminarHorarioModal(true); 
+
+      const dia="sabado";
+      const horaInicio=celdaEnEdicion.dataset.hora;
+      const horaFin=sumarHoras(horaInicio,duracion);
+      const docId=`${fechaSabadoISO}_${dia}_${horaInicio}_${horaFin}`;
+
+      await db.collection("horario_extra").doc(docId).set({
+        fecha: fechaSabadoISO,
+        dia,
+        hora: horaInicio,
+        hora_fin: horaFin,
+        duracion,
+        asignatura: asigSel.toUpperCase(),
+        profesor,
+        ciclo
+      });
+
+      cerrarModal();
+      cargarTabla();
+    }
+
+    async function eliminarHorarioModal(suppressAlert = false){
+      if (!celdaEnEdicion) return;
+      const prefijo=`${fechaSabadoISO}_sabado_${celdaEnEdicion.dataset.hora}_`;
+      
+      let idAEliminar=null;
+      for (const id in datosExtra){ 
+          // Buscar un bloque cuya hora de inicio sea EXACTAMENTE la hora de la celda
+          if (id.startsWith(prefijo)) { 
+              idAEliminar=id; break; 
+          }
+          // También debe buscar si esta celda es parte de un bloque más grande que inicia antes
+          const b = datosExtra[id];
+          const inicio=convertirHoraANum(b.hora), fin=convertirHoraANum(b.hora_fin), hnum=convertirHoraANum(celdaEnEdicion.dataset.hora);
+          if (hnum > inicio && hnum < fin){
+              // Si la celda actual está dentro de un bloque, debe eliminar el bloque completo
+              if (confirm(`La celda (${celdaEnEdicion.dataset.hora}) es parte de un bloque que comienza a las ${b.hora}. ¿Deseas eliminar el bloque completo?`)){
+                   idAEliminar = id; break;
+              } else {
+                   return; // Cancelar
+              }
+          }
+      }
+
+      if (idAEliminar){
+        await db.collection("horario_extra").doc(idAEliminar).delete();
+        if (!suppressAlert) {
+            cerrarModal(); 
+            cargarTabla();
+        }
+      }else if (!suppressAlert) {
+        alert("No se encontró un bloque exacto a esa hora para eliminar.");
+      }
+    }
+
+    // ---------- Clases predefinidas (reutiliza tu colección) ----------
+    async function precargarClasesCiclo(ciclo){
+      if (clasesPorCiclo[ciclo]) return;
+      const arr=[];
+      const snap=await db.collection("clases_definidas").where("ciclo","==",ciclo).get();
+      snap.forEach(d=>{
+        const data=d.data();
+        arr.push({ asignatura:(data.asignatura||"").toUpperCase(), profesor:data.profesor||"" });
+      });
+      clasesPorCiclo[ciclo]=arr;
+    }
+
+    async function actualizarOpcionesAsignaturas(){
+      const ciclo=document.getElementById("inputCiclo").value.trim();
+      const sel=document.getElementById("inputAsignatura");
+      sel.innerHTML=`<option value="">Selecciona asignatura...</option>`;
+      document.getElementById("inputProfesorAuto").value="";
+
+      if (!ciclo) return;
+      await precargarClasesCiclo(ciclo);
+      const lista=clasesPorCiclo[ciclo]||[];
+
+      const setAsig=new Set(); lista.forEach(it=>{ if(it.asignatura) setAsig.add(it.asignatura.toUpperCase()); });
+      [...setAsig].sort().forEach(asig=>{
+        sel.insertAdjacentHTML("beforeend", `<option value="${asig}">${asig}</option>`);
+      });
+    }
+
+    async function actualizarDocenteAuto(){
+      const ciclo=document.getElementById("inputCiclo").value.trim();
+      const asig=document.getElementById("inputAsignatura").value;
+      const out=document.getElementById("inputProfesorAuto");
+      out.value="";
+      if (!ciclo || !asig) return;
+
+      await precargarClasesCiclo(ciclo);
+      const lista=clasesPorCiclo[ciclo]||[];
+      const found=lista.find(it=>(it.asignatura||"").toUpperCase()===asig.toUpperCase());
+      if (found) out.value=found.profesor||"";
+    }
+
+
+    // ==========================================================
+    // 🔑 BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN 
+    // ==========================================================
+    auth.onAuthStateChanged(async (user) => {
+        
+        // 1. Si NO hay usuario logueado, redirigir al login
+        if (!user) {
+            window.location.href = "login.html"; 
+            return;
+        }
+
+        // 2. Usuario logueado: Verificar si su UID existe en la colección 'supervisores'
+        try {
+            const userUid = user.uid;
+            const supervisorDoc = await db.collection("supervisores").doc(userUid).get();
+
+            if (supervisorDoc.exists) {
+                // 🔑 ACCESO CONCEDIDO
+                console.log("Supervisor autorizado. Iniciando interfaz.");
+                // Llama a la función principal para inicializar la UI
+                inicializarUI(); 
+                
+            } else {
+                // Acceso denegado: Logueado, pero no es supervisor
+                alert("Acceso denegado. No tienes permisos de supervisor.");
+                auth.signOut(); // Desloguear
+                window.location.href = "login.html";
+            }
+
+        } catch (error) {
+            console.error("Error verificando supervisor:", error);
+            alert("Ocurrió un error en la verificación de seguridad.");
+            auth.signOut();
+            window.location.href = "login.html";
+        }
+    });
+
+  </script>
+</body>
+</html>

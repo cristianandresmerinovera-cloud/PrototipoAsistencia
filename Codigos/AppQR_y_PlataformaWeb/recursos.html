@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recursos de Laboratorio</title>
+<style>
+  :root {
+    --primario: #2563eb;
+    --primario-osc: #1e40af;
+    --bg: #f1f5f9;
+    --texto: #0f172a;
+    --borde: #e2e8f0;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg);
+    color: var(--texto);
+  }
+
+  header {
+    background-color: var(--primario);
+    color: white;
+    padding: 20px 15px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 1.8em;
+    text-align: center;
+  }
+
+  /* Logos a los lados */
+  .header-logo-left, .header-logo-right {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 50px;
+  }
+
+  .header-logo-left { left: 15px; }
+  .header-logo-right { right: 15px; }
+
+  /* Mensaje debajo del header */
+  .header-subtitle {
+    text-align: center;
+    color: var(--primario-osc);
+    font-size: 0.95em;
+    margin: 15px 20px 30px;
+  }
+
+  main {
+    max-width: 900px;
+    margin: 0 auto 30px;
+    padding: 0 15px;
+  }
+
+  .card {
+    background-color: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 8px 24px rgba(2,6,23,0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  .card h2 {
+    margin: 0;
+    font-size: 1.3em;
+    color: var(--primario-osc);
+  }
+
+  .card p {
+    margin: 5px 0 0;
+    font-size: 0.95em;
+    color: #555;
+  }
+
+  .btn {
+    background-color: var(--primario);
+    color: white;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .btn:hover { background-color: var(--primario-osc); }
+
+  @media (max-width:720px){
+    header { flex-direction: column; text-align: center; padding: 25px 10px; }
+    .header-logo-left, .header-logo-right { position: static; transform: none; margin-bottom: 10px; }
+    .card { flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="logounl.png" alt="Logo UNL" class="header-logo-left">
+  <h1> 📂 Recursos de Laboratorio</h1>
+  <img src="logocit.png" alt="Logo laboratorio" class="header-logo-right">
+</header>
+
+
+<p class="header-subtitle">
+  Encuentra los documentos necesarios para  un correcto uso del laboratorio.
+</p>
+
+<main>
+  <div class="card">
+    <div>
+      <h2>Normas de Laboratorio</h2>
+      <p>Revisa las normas antes de cualquier práctica para garantizar seguridad y orden.</p>
+    </div>
+    <a href="https://drive.google.com/file/d/1kMyKbgn8Y5YSAomE9XENaOh4H0izpvrz/view?usp=drive_link" class="btn">Descargar Normas</a>
+  </div>
+
+  <div class="card">
+    <div>
+      <h2>Manual de la App</h2>
+      <p>Aprende a registrar asistencia y acceder a recursos digitales usando la aplicación.</p>
+    </div>
+    <a href="#" class="btn">Descargar Manual</a>
+  </div>
+
+  <div class="card">
+    <div>
+      <h2>Manual del Sistema Biométrico</h2>
+      <p>Guía de uso del sistema biométrico para el registro de asistencia.</p>
+    </div>
+    <a href="" class="btn">Descargar Manual</a>
+  </div>
+
+  <div class="card">
+    <div>
+      <h2>Horarios de Laboratorio</h2>
+      <p>Consulta los horarios de tus prácticas y reserva los espacios disponibles.</p>
+    </div>
+    <a href="https://drive.google.com/file/d/1yFsP9DJK0XIbRl4Wd0VFLu1RiOLuiGfb/view?usp=sharing" class="btn">Ver Horarios</a>
+  </div>
+</main>
+
+</body>
+</html>

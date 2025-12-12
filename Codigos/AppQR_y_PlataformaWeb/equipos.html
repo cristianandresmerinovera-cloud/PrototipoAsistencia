@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Panel de Reservas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <style>
+    :root { --azul:#2563eb; --azul-osc:#1e40af; --bg:#f1f5f9; }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;padding:20px}
+    h1{margin:0;color:#1e3a8a}
+    .top-bar{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap}
+    .btn{background:var(--azul);color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
+    .btn:hover{background:var(--azul-osc)}
+    .btn-green{background:#10b981}.btn-green:hover{background:#059669}
+    .btn-danger{background:#dc2626}.btn-danger:hover{background:#b91c1c}
+    .layout{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+    .card{background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:14px}
+    .card h2{margin:0 0 8px;color:#1e3a8a;font-size:18px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #e5e7eb;font-size:14px}
+    th{background:var(--azul);color:#fff;position:sticky;top:0}
+    tr.clickable{cursor:pointer}
+    tr.selected{outline:2px solid var(--azul)}
+    .status-libre{color:#059669;font-weight:600}
+    .status-reservado{color:#b45309;font-weight:600}
+    .status-uso{color:#1d4ed8;font-weight:600}
+    .status-mant{color:#dc2626;font-weight:600}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    label{font-size:13px;color:#334155}
+    input,select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
+    .search-wrap{display:flex;gap:8px;align-items:center;margin:6px 0}
+    .header-line{font-size:14px;margin:6px 0 10px}
+    .actions{display:flex;gap:6px;justify-content:center}
+    .muted{color:#64748b}
+    /* Modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+    .modal .box{background:#fff;border-radius:12px;max-width:560px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+    .modal h3{margin:0 0 10px;color:#1e3a8a}
+    .modal .row + .row{margin-top:8px}
+    @media (max-width:1000px){.layout{grid-template-columns:1fr}}
+  .btn-mini.regreso {
+  background: #004a99;         /* azul institucional */
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  font-size: 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.btn-mini.regreso:hover {
+  background: #005cc8;
+}
+
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <h1>📅 Panel de Reservas</h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="btnToggleReservas" class="btn" title="Alterna entre ver todas las reservas/usos o solo del equipo seleccionado">Ver todo</button>
+      <a class="btn btn-green" href="cargar_equipos.html">➕ Cargar Equipos</a>
+    </div>
+  </div>
+ <!-- Botón regresar -->
+  <div style="text-align:left; margin-bottom:15px;">
+    <button id="btnRegresar" class="btn-mini regreso" onclick="window.location.href='portal.html'">
+      🔙 Regresar al portal
+    </button>
+  </div>
+  <div class="layout">
+    <!-- IZQUIERDA: Equipos + filtro -->
+    <div class="card">
+      <h2>Equipos disponibles</h2>
+      <div class="search-wrap" style="justify-content:space-between">
+        <input id="filtroEquipos" type="text" placeholder="Buscar equipo: código, nombre, marca o modelo…" />
+        <div style="display:flex; gap:6px">
+          <button id="btnActualizarEstados" class="btn" type="button" title="Recalcula el estado en base a reservas/usos">Actualizar estado</button>
+          <button id="btnEquiposTodos" class="btn" type="button">Todos los equipos</button>
+          <button id="btnEquiposConReserva" class="btn" type="button">Solo con reservas</button>
+        </div>
+      </div>
+      <div style="max-height:420px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px">
+        <table>
+          <thead>
+            <tr>
+              <th style="min-width:110px">Código</th>
+              <th style="min-width:140px">Nombre</th>
+              <th style="min-width:120px">Marca</th>
+              <th style="min-width:160px">Modelo</th>
+              <th style="min-width:160px">Serie</th>
+              <th style="min-width:110px">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyEquipos"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DERECHA: Crear reserva -->
+    <div class="card">
+      <h2>Crear reserva</h2>
+
+      <label>Buscar equipo (no quita el selector)</label>
+      <div class="row">
+        <input id="buscaEquipo" type="text" placeholder="Escribe para filtrar: código/nombre/marca/modelo…" />
+        <select id="selectEquipo"></select>
+      </div>
+
+      <label style="margin-top:8px">Buscar estudiante (nombre o cédula)</label>
+      <div class="row">
+        <input id="buscaEstudiante" type="text" placeholder="Escribe para filtrar…" />
+        <select id="selectEstudiante"></select>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label>Fecha</label>
+          <input id="fecha" type="date" required />
+        </div>
+        <div>
+          <label>Hora inicio</label>
+          <input id="horaInicio" type="time" required />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Hora fin</label>
+          <input id="horaFin" type="time" required />
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button id="btnReservar" class="btn" style="width:100%">Reservar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LISTA INFERIOR: Usos activos + Reservas -->
+  <div class="card" style="margin-top:16px">
+    <h2>Usos activos y reservas futuras</h2>
+    <div id="equipHeader" class="header-line" style="display:none"></div>
+
+    <div style="max-height:360px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px">
+      <table>
+        <thead>
+          <tr>
+            <th>Equipo</th>
+            <th>Estudiante</th>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th style="min-width:200px;text-align:center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyReservas"></tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:6px">* Los usos activos aparecen primero, luego las reservas.</div>
+  </div>
+
+  <!-- MODAL EDITAR RESERVA -->
+  <div id="modalEditar" class="modal" aria-hidden="true">
+    <div class="box" role="dialog" aria-modal="true">
+      <h3>Editar reserva</h3>
+      <div class="row">
+        <div>
+          <label>Equipo</label>
+          <input id="editBuscaEquipo" type="text" placeholder="Filtrar equipos…" />
+          <select id="editSelectEquipo"></select>
+        </div>
+        <div>
+          <label>Estudiante</label>
+          <input id="editBuscaEstudiante" type="text" placeholder="Filtrar estudiantes…" />
+          <select id="editSelectEstudiante"></select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Fecha</label>
+          <input id="editFecha" type="date" />
+        </div>
+        <div>
+          <label>Hora inicio</label>
+          <input id="editHoraInicio" type="time" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Hora fin</label>
+          <input id="editHoraFin" type="time" />
+        </div>
+        <div class="actions" style="align-items:end">
+          <button id="btnGuardarEdicion" class="btn">Guardar cambios</button>
+          <button id="btnCancelarEdicion" class="btn btn-danger" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ===== Firebase =====
+  const firebaseConfig = {
+    apiKey:"AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+    authDomain:"escaner-qr-d7d65.firebaseapp.com",
+    projectId:"escaner-qr-d7d65",
+    storageBucket:"escaner-qr-d7d65.appspot.com",
+    messagingSenderId:"982923527298",
+    appId:"1:982923527298:web:df13850f38d847cfdae09b"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // ===== UI refs =====
+  const tbodyEquipos = document.getElementById("tbodyEquipos");
+  const filtroEquipos = document.getElementById("filtroEquipos");
+  const equipHeader = document.getElementById("equipHeader");
+
+  const buscaEquipo = document.getElementById("buscaEquipo");
+  const selectEquipo = document.getElementById("selectEquipo");
+  const buscaEstudiante = document.getElementById("buscaEstudiante");
+  const selectEstudiante = document.getElementById("selectEstudiante");
+
+  const fecha = document.getElementById("fecha");
+  const horaInicio = document.getElementById("horaInicio");
+  const horaFin = document.getElementById("horaFin");
+  const btnReservar = document.getElementById("btnReservar");
+  const btnToggleReservas = document.getElementById("btnToggleReservas");
+  const tbodyReservas = document.getElementById("tbodyReservas");
+  const btnEquiposTodos = document.getElementById("btnEquiposTodos");
+  const btnEquiposConReserva = document.getElementById("btnEquiposConReserva");
+  const btnActualizarEstados = document.getElementById("btnActualizarEstados");
+
+  // Modal editar
+  const modalEditar = document.getElementById("modalEditar");
+  const editBuscaEquipo = document.getElementById("editBuscaEquipo");
+  const editSelectEquipo = document.getElementById("editSelectEquipo");
+  const editBuscaEstudiante = document.getElementById("editBuscaEstudiante");
+  const editSelectEstudiante = document.getElementById("editSelectEstudiante");
+  const editFecha = document.getElementById("editFecha");
+  const editHoraInicio = document.getElementById("editHoraInicio");
+  const editHoraFin = document.getElementById("editHoraFin");
+  const btnGuardarEdicion = document.getElementById("btnGuardarEdicion");
+  const btnCancelarEdicion = document.getElementById("btnCancelarEdicion");
+
+  // ===== Estado =====
+  let equiposCache = [];        // {codigo, nombre, marca, modelo, serie, estado}
+  let estudiantesCache = [];    // {cedula, nombre}
+  let equipoSeleccionado = null; // código
+  let showAll = false;           // false=por equipo; true=todos
+  let unsubReservas = null;      // listener de reservas
+  let mostrarSoloEquiposConReserva = false;
+  let equiposConReservaHoy = new Set();
+  let reservasCache = [];        // reservas activas/futuras
+  let editReservaId = null;
+  // en uso (para estado visual)
+  let equiposEnUso = new Set();
+  // cache usos activos para tabla inferior
+  let usosActivosCache = [];
+
+  // ===== Utilidades =====
+  const norm = s => (s || "").toString().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,"");
+function hoyStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+  const pad = n => String(n).padStart(2,"0");
+  function nowHHMM(){ const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`;}
+  function hhmmToMinutes(hhmm){ const [h,m]=hhmm.split(":").map(Number); return h*60+(m||0); }
+  function rangosSeSolapan(aIni,aFin,bIni,bFin){
+    return hhmmToMinutes(aIni) < hhmmToMinutes(bFin) && hhmmToMinutes(aFin) > hhmmToMinutes(bIni);
+  }
+  function tsToYMD(ts){
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+  function tsToHHMM(ts){
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  // ===== AUX NUEVO: limpieza y actualización tras usos vencidos =====
+  function usoVencido(u){
+    try { return u.fin && u.fin.toDate() <= new Date(); }
+    catch { return false; }
+  }
+
+  async function actualizarEstadoEquipoPostUso(equipoCodigo){
+    const today = hoyStr();
+    const ahora = nowHHMM();
+    const rs = await db.collection("reservas").where("fecha", ">=", today).get();
+    const futuras = rs.docs
+      .map(d=>d.data())
+      .filter(r => r.id_equipo === equipoCodigo)
+      .filter(r => (r.fecha > today) || (r.fecha === today && hhmmToMinutes(r.hora_fin) > hhmmToMinutes(ahora)));
+    const nuevoEstado = futuras.length ? "reservado" : "libre";
+    await db.collection("equipos").doc(equipoCodigo).update({ estado: nuevoEstado });
+  }
+
+  async function cleanupUsosVencidosSupervisor(){
+    const snap = await db.collection("usos").where("activo","==",true).get();
+    const vencidos = [];
+    snap.forEach(d => { const u=d.data(); if (usoVencido(u)) vencidos.push({id:d.id, ...u}); });
+    for (const u of vencidos){
+      try{
+        await db.collection("usos").doc(u.id).delete();
+        if (u.id_equipo) await actualizarEstadoEquipoPostUso(u.id_equipo);
+      }catch(e){/*noop*/}
+    }
+    if (vencidos.length) renderListaInferior();
+  }
+
+  // ===== Render equipos =====
+  function renderEquiposTabla(filter="") {
+    const q = norm(filter);
+    const base = equiposCache.filter(e =>
+      (!q || [e.codigo,e.nombre,e.marca,e.modelo].some(v => norm(v).includes(q))) &&
+      (!mostrarSoloEquiposConReserva || equiposConReservaHoy.has(e.codigo))
+    );
+
+    tbodyEquipos.innerHTML = "";
+    base.forEach(e => {
+      const tr = document.createElement("tr");
+      tr.className = "clickable";
+      tr.dataset.codigo = e.codigo;
+
+      // prioridad en_uso > mantenimiento > reservado > libre
+      let estado;
+      if (equiposEnUso.has(e.codigo)) estado = "en_uso";
+      else if (e.estado === "mantenimiento") estado = "mantenimiento";
+      else if (e.estado === "reservado") estado = "reservado";
+      else estado = "libre";
+
+      const estadoCls =
+        estado === "en_uso" ? "status-uso" :
+        estado === "mantenimiento" ? "status-mant" :
+        estado === "reservado" ? "status-reservado" : "status-libre";
+
+      tr.innerHTML = `
+        <td>${e.codigo}</td>
+        <td>${e.nombre}</td>
+        <td>${e.marca}</td>
+        <td>${e.modelo}</td>
+        <td>${e.serie || ""}</td>
+        <td class="${estadoCls}">${estado.replace("_"," ")}</td>
+      `;
+      tr.addEventListener("click", ()=> seleccionarEquipoDesdeTabla(e.codigo));
+      if (e.codigo === equipoSeleccionado) tr.classList.add("selected");
+      tbodyEquipos.appendChild(tr);
+    });
+
+    if (!equipoSeleccionado && base.length) seleccionarEquipoDesdeTabla(base[0].codigo);
+  }
+
+  function renderSelectEquipos(filter="") {
+    const q = norm(filter);
+    selectEquipo.innerHTML = "";
+    editSelectEquipo.innerHTML = "";
+    equiposCache
+      .filter(e => !q || [e.codigo,e.nombre,e.marca,e.modelo].some(v => norm(v).includes(q)))
+      .forEach(e=>{
+        const text = `${e.codigo} — ${e.nombre} ${e.marca} ${e.modelo}`;
+        selectEquipo.appendChild(new Option(text, e.codigo));
+        editSelectEquipo.appendChild(new Option(text, e.codigo));
+      });
+    if (equipoSeleccionado) {
+      selectEquipo.value = equipoSeleccionado;
+      editSelectEquipo.value = equipoSeleccionado;
+    }
+  }
+
+  function renderSelectEstudiantes(filter="") {
+    const q = norm(filter);
+    selectEstudiante.innerHTML = "";
+    editSelectEstudiante.innerHTML = "";
+    estudiantesCache
+      .filter(s => !q || norm(s.nombre).includes(q) || norm(s.cedula).includes(q))
+      .forEach(s=>{
+        const text = `${s.nombre} (${s.cedula})`;
+        selectEstudiante.appendChild(new Option(text, s.cedula));
+        editSelectEstudiante.appendChild(new Option(text, s.cedula));
+      });
+  }
+
+  function headerEquipoSeleccionado() {
+    if (showAll || !equipoSeleccionado) { equipHeader.style.display = "none"; equipHeader.textContent=""; return; }
+    const eq = equiposCache.find(x=>x.codigo===equipoSeleccionado);
+    if (!eq) { equipHeader.style.display="none"; equipHeader.textContent=""; return; }
+
+    let estado;
+    if (equiposEnUso.has(eq.codigo)) estado = "en_uso";
+    else if (eq.estado === "mantenimiento") estado = "mantenimiento";
+    else if (eq.estado === "reservado") estado = "reservado";
+    else estado = "libre";
+
+    const estadoCls =
+      estado === "en_uso" ? "status-uso" :
+      estado === "mantenimiento" ? "status-mant" :
+      estado === "reservado" ? "status-reservado" : "status-libre";
+
+    equipHeader.style.display = "block";
+    equipHeader.innerHTML = `<b>${eq.codigo}</b> — ${eq.nombre} ${eq.marca} ${eq.modelo} <span class="${estadoCls}">(${estado.replace("_"," ")})</span><br>Serie: ${eq.serie || "-"}`;
+  }
+
+  // ===== Firestore listeners =====
+  db.collection("equipos").onSnapshot(snap=>{
+    equiposCache = snap.docs.map(d=>d.data());
+    if (equipoSeleccionado && !equiposCache.some(e=>e.codigo===equipoSeleccionado)){
+      equipoSeleccionado = null;
+      swapReservasListener();
+    }
+    renderEquiposTabla(filtroEquipos.value);
+    renderSelectEquipos(buscaEquipo.value);
+    headerEquipoSeleccionado();
+  });
+
+  db.collection("estudiantes").onSnapshot(snap=>{
+    estudiantesCache = snap.docs.map(d=>d.data());
+    renderSelectEstudiantes(buscaEstudiante.value);
+  });
+
+  // Set de equipos con reservas desde hoy (para filtro "Solo con reservas")
+  db.collection("reservas")
+    .where("fecha", ">=", hoyStr())
+    .onSnapshot(snap => {
+      const s = new Set();
+      snap.forEach(d => {
+        const r = d.data();
+        if (r.id_equipo) s.add(r.id_equipo);
+      });
+      equiposConReservaHoy = s;
+      renderEquiposTabla(filtroEquipos.value);
+    });
+
+  // Usos activos (filtra vencidos y limpia en segundo plano)
+  db.collection("usos").where("activo","==",true).onSnapshot(async snap=>{
+    const set = new Set();
+    const arr = [];
+    const expirados = [];
+
+    snap.forEach(d=>{
+      const u = {id:d.id, ...d.data()};
+      if (usoVencido(u)) { expirados.push(u); return; } // no mostrar
+      if (u.id_equipo) set.add(u.id_equipo);
+      arr.push(u);
+    });
+
+    equiposEnUso = set;
+    usosActivosCache = arr;
+
+    renderEquiposTabla(filtroEquipos.value);
+    headerEquipoSeleccionado();
+    renderListaInferior();
+
+    // limpieza silenciosa
+    for (const u of expirados){
+      try{
+        await db.collection("usos").doc(u.id).delete();
+        if (u.id_equipo) await actualizarEstadoEquipoPostUso(u.id_equipo);
+      }catch(e){/* noop */}
+    }
+  });
+
+  // ===== Listener de reservas (global o por equipo) =====
+  function swapReservasListener(){
+    if (typeof unsubReservas === "function") { unsubReservas(); unsubReservas = null; }
+    tbodyReservas.innerHTML = "";
+
+    const base = db.collection("reservas");
+    const today = hoyStr();
+
+    if (showAll){
+      unsubReservas = base.where("fecha", ">=", today).orderBy("fecha").onSnapshot(draw);
+      equipHeader.style.display = "none";
+    } else if (equipoSeleccionado){
+      unsubReservas = base
+        .where("id_equipo","==",equipoSeleccionado)
+        .where("fecha", ">=", today)
+        .orderBy("fecha")
+        .onSnapshot(draw);
+      headerEquipoSeleccionado();
+    } else {
+      tbodyReservas.innerHTML = `<tr><td colspan="5">Selecciona un equipo para ver sus usos y reservas.</td></tr>`;
+      equipHeader.style.display = "none";
+    }
+
+    function draw(snap){
+      reservasCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      renderListaInferior();
+      scheduleRecompute();
+    }
+  }
+
+  // ===== Render combinado (Usos activos + Reservas) =====
+  function renderListaInferior(){
+    const filtroEquipo = showAll ? null : equipoSeleccionado;
+
+    // Usos activos (filtrados por equipo, orden por fin asc). Por si acaso, filtramos vencidos.
+    let usos = usosActivosCache
+      .filter(u => !filtroEquipo || u.id_equipo === filtroEquipo)
+      .filter(u => !usoVencido(u))
+      .sort((a,b)=> (a.fin?.toMillis?.()||0) - (b.fin?.toMillis?.()||0));
+
+    const resvs = reservasCache
+      .filter(r => !filtroEquipo || r.id_equipo === filtroEquipo)
+      .sort((a,b)=> (a.fecha.localeCompare(b.fecha) || a.hora_inicio.localeCompare(b.hora_inicio)));
+
+    tbodyReservas.innerHTML = "";
+
+    usos.forEach(u=>{
+      const tr = document.createElement("tr");
+      const fechaUso = u.inicio ? tsToYMD(u.inicio) : hoyStr();
+      const horaIni = u.inicio ? tsToHHMM(u.inicio) : "-";
+      const horaFin = u.fin ? tsToHHMM(u.fin) : "-";
+      tr.innerHTML = `
+        <td>${u.nombre_equipo || u.id_equipo}</td>
+        <td>${u.nombre_estudiante || ""}</td>
+        <td>${fechaUso}</td>
+        <td>${horaIni} - ${horaFin} <span class="status-uso" style="margin-left:6px">(En uso)</span></td>
+        <td class="actions">
+          <button class="btn btn-danger" data-terminar-uso="${u.id}" data-equipo="${u.id_equipo}">Terminar</button>
+        </td>
+      `;
+      tbodyReservas.appendChild(tr);
+    });
+
+    resvs.forEach(r=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.nombre_equipo}</td>
+        <td>${r.nombre_estudiante}</td>
+        <td>${r.fecha}</td>
+        <td>${r.hora_inicio} - ${r.hora_fin}</td>
+        <td class="actions">
+          <button class="btn" data-edit="${r.id}">Editar</button>
+          <button class="btn btn-danger" data-del="${r.id}">Eliminar</button>
+        </td>
+      `;
+      tbodyReservas.appendChild(tr);
+    });
+
+    if (!usos.length && !resvs.length){
+      tbodyReservas.innerHTML = `<tr><td colspan="5">No hay usos activos ni reservas futuras.</td></tr>`;
+    }
+  }
+
+  // ===== Delegación de eventos para Editar/Eliminar/Terminar =====
+  tbodyReservas.addEventListener("click", (e)=>{
+    const editBtn = e.target.closest("button[data-edit]");
+    const delBtn = e.target.closest("button[data-del]");
+    const finBtn = e.target.closest("button[data-terminar-uso]");
+
+    if (editBtn) abrirEditar(editBtn.dataset.edit);
+    if (delBtn) eliminarReserva(delBtn.dataset.del);
+    if (finBtn) terminarUso(finBtn.dataset.terminarUso, finBtn.dataset.equipo);
+  });
+
+  // ===== Filtros y selección =====
+  filtroEquipos.addEventListener("input", ()=> renderEquiposTabla(filtroEquipos.value));
+  buscaEquipo.addEventListener("input", ()=> renderSelectEquipos(buscaEquipo.value));
+  buscaEstudiante.addEventListener("input", ()=> renderSelectEstudiantes(buscaEstudiante.value));
+
+  function seleccionarEquipoDesdeTabla(codigo){
+    equipoSeleccionado = codigo;
+    renderEquiposTabla(filtroEquipos.value);
+    renderSelectEquipos(buscaEquipo.value);
+    selectEquipo.value = codigo;
+    headerEquipoSeleccionado();
+    if (!showAll) swapReservasListener(); else renderListaInferior();
+  }
+
+  selectEquipo.addEventListener("change", ()=>{
+    equipoSeleccionado = selectEquipo.value || null;
+    renderEquiposTabla(filtroEquipos.value);
+    if (!showAll) swapReservasListener(); else renderListaInferior();
+  });
+
+  btnToggleReservas.addEventListener("click", ()=>{
+    showAll = !showAll;
+    btnToggleReservas.textContent = showAll ? "Volver a vista por equipo" : "Ver todo";
+    swapReservasListener();
+    renderListaInferior();
+  });
+
+  btnEquiposTodos.addEventListener("click", ()=>{
+    mostrarSoloEquiposConReserva = false;
+    renderEquiposTabla(filtroEquipos.value);
+  });
+
+  btnEquiposConReserva.addEventListener("click", ()=>{
+    mostrarSoloEquiposConReserva = true;
+    renderEquiposTabla(filtroEquipos.value);
+  });
+
+  // ===== Crear reserva (con verificación de solape y tiempo real) =====
+  function hhmmOk(a,b){ return /^\d{2}:\d{2}$/.test(a) && /^\d{2}:\d{2}$/.test(b); }
+  function buildDateTime(fechaStr, hhmm) {
+    const [H, M] = hhmm.split(":").map(Number);
+    const d = new Date(`${fechaStr}T00:00:00`);
+    d.setHours(H, M || 0, 0, 0);
+    return d;
+  }
+
+  btnReservar.addEventListener("click", async ()=>{
+    const codigoEq = selectEquipo.value;
+    const cedula = selectEstudiante.value;
+    const f = fecha.value;
+    const hi = horaInicio.value;
+    const hf = horaFin.value;
+
+    if (!codigoEq || !cedula || !f || !hi || !hf){
+      alert("Completa equipo, estudiante, fecha y horas.");
+      return;
+    }
+    if (!hhmmOk(hi,hf)){
+      alert("Horas inválidas. Usa formato HH:MM.");
+      return;
+    }
+    const inicioDT = buildDateTime(f, hi);
+    const finDT    = buildDateTime(f, hf);
+    if (finDT <= inicioDT){ alert("La hora fin debe ser mayor que la hora inicio."); return; }
+    if (inicioDT < new Date()){ alert("❌ No se puede reservar en el pasado."); return; }
+
+    const [eqDoc, estDoc] = await Promise.all([
+      db.collection("equipos").doc(codigoEq).get(),
+      db.collection("estudiantes").doc(cedula).get()
+    ]);
+    if (!eqDoc.exists){ alert("Equipo no encontrado."); return; }
+    if (!estDoc.exists){ alert("Estudiante no encontrado."); return; }
+
+    const eq = eqDoc.data();
+    const est = estDoc.data();
+
+    // Conflictos con reservas
+    const snap = await db.collection("reservas")
+      .where("id_equipo","==",codigoEq)
+      .where("fecha","==",f)
+      .get();
+
+    let choca = false, conflicto = null;
+    snap.forEach(d=>{
+      const r = d.data();
+      if (rangosSeSolapan(hi, hf, r.hora_inicio, r.hora_fin)){
+        choca = true; conflicto = r;
+      }
+    });
+    if (choca){
+      alert(`⚠️ Conflicto: ya existe una reserva para ${eq.nombre} el ${f} de ${conflicto.hora_inicio} a ${conflicto.hora_fin}.`);
+      return;
+    }
+
+    await db.collection("reservas").add({
+      id_equipo: codigoEq,
+      codigo_equipo: eq.codigo,
+      nombre_equipo: `${eq.nombre} ${eq.marca} ${eq.modelo}`,
+      fecha: f,
+      hora_inicio: hi,
+      hora_fin: hf,
+      cedula_estudiante: est.cedula,
+      nombre_estudiante: est.nombre
+    });
+
+    alert("✅ Reserva creada correctamente.");
+  });
+
+  // ===== Editar / Eliminar RESERVA =====
+  function openModal(){ modalEditar.style.display="flex"; modalEditar.setAttribute("aria-hidden","false"); }
+  function closeModal(){ modalEditar.style.display="none"; modalEditar.setAttribute("aria-hidden","true"); editReservaId=null; }
+
+  function renderEditSelectEquipos(filter=""){
+    const q = norm(filter);
+    editSelectEquipo.innerHTML = "";
+    equiposCache
+      .filter(e => !q || [e.codigo,e.nombre,e.marca,e.modelo].some(v => norm(v).includes(q)))
+      .forEach(e=>{
+        editSelectEquipo.appendChild(new Option(`${e.codigo} — ${e.nombre} ${e.marca} ${e.modelo}`, e.codigo));
+      });
+    if (equipoSeleccionado) editSelectEquipo.value = equipoSeleccionado;
+  }
+  editBuscaEquipo.addEventListener("input", ()=> renderEditSelectEquipos(editBuscaEquipo.value));
+  editBuscaEstudiante.addEventListener("input", ()=> renderSelectEstudiantes(editBuscaEstudiante.value));
+
+  async function abrirEditar(id){
+    const doc = await db.collection("reservas").doc(id).get();
+    if (!doc.exists) return alert("Reserva no encontrada.");
+    const r = doc.data();
+    editReservaId = id;
+
+    renderEditSelectEquipos();
+    renderSelectEstudiantes();
+
+    editSelectEquipo.value = r.id_equipo;
+    editSelectEstudiante.value = r.cedula_estudiante;
+    editFecha.value = r.fecha;
+    editHoraInicio.value = r.hora_inicio;
+    editHoraFin.value = r.hora_fin;
+
+    openModal();
+  }
+
+  modalEditar.addEventListener("click", (e)=> { if (e.target === modalEditar) closeModal(); });
+  document.addEventListener("keydown", (e)=> { if (e.key === "Escape" && modalEditar.getAttribute("aria-hidden")==="false") closeModal(); });
+  btnCancelarEdicion.addEventListener("click", closeModal);
+
+  btnGuardarEdicion.addEventListener("click", async ()=>{
+    if (!editReservaId) return;
+    const codigoEq = editSelectEquipo.value;
+    const cedula = editSelectEstudiante.value;
+    const f = editFecha.value;
+    const hi = editHoraInicio.value;
+    const hf = editHoraFin.value;
+
+    if (!codigoEq || !cedula || !f || !hi || !hf){
+      alert("Completa equipo, estudiante, fecha y horas.");
+      return;
+    }
+    if (!/^\d{2}:\d{2}$/.test(hi) || !/^\d{2}:\d{2}$/.test(hf)){
+      alert("Horas inválidas. Usa formato HH:MM.");
+      return;
+    }
+    const inicioDT = new Date(`${f}T${hi}:00`);
+    const finDT    = new Date(`${f}T${hf}:00`);
+    if (finDT <= inicioDT){ alert("La hora fin debe ser mayor que la hora inicio."); return; }
+    if (inicioDT < new Date()){ alert("❌ No se puede dejar una reserva con inicio en el pasado."); return; }
+
+    const [eqDoc, estDoc] = await Promise.all([
+      db.collection("equipos").doc(codigoEq).get(),
+      db.collection("estudiantes").doc(cedula).get()
+    ]);
+    if (!eqDoc.exists){ alert("Equipo no encontrado."); return; }
+    if (!estDoc.exists){ alert("Estudiante no encontrado."); return; }
+    const eq = eqDoc.data();
+    const est = estDoc.data();
+
+    const snap = await db.collection("reservas")
+      .where("id_equipo","==",codigoEq)
+      .where("fecha","==",f)
+      .get();
+
+    let choca = false;
+    snap.forEach(d=>{
+      if (d.id === editReservaId) return;
+      const r = d.data();
+      if (rangosSeSolapan(hi, hf, r.hora_inicio, r.hora_fin)){
+        choca = true;
+      }
+    });
+    if (choca){
+      alert("⚠️ Conflicto: ya existe una reserva en ese rango para este equipo.");
+      return;
+    }
+
+    await db.collection("reservas").doc(editReservaId).update({
+      id_equipo: codigoEq,
+      codigo_equipo: eq.codigo,
+      nombre_equipo: `${eq.nombre} ${eq.marca} ${eq.modelo}`,
+      fecha: f,
+      hora_inicio: hi,
+      hora_fin: hf,
+      cedula_estudiante: est.cedula,
+      nombre_estudiante: est.nombre
+    });
+
+    closeModal();
+    alert("✅ Reserva actualizada.");
+  });
+
+  async function eliminarReserva(id){
+    if (!confirm("¿Eliminar esta reserva?")) return;
+    await db.collection("reservas").doc(id).delete();
+    alert("🗑️ Reserva eliminada.");
+  }
+
+  // ===== Terminar USO =====
+  async function terminarUso(usoId, codigoEquipo){
+    if (!confirm("¿Terminar el uso activo de este equipo?")) return;
+    const today = hoyStr();
+    const now = nowHHMM();
+
+    try{
+      await db.runTransaction(async (tx)=>{
+        const usoRef = db.collection("usos").doc(usoId);
+        const eqRef  = db.collection("equipos").doc(codigoEquipo);
+
+        const [usoSnap, eqSnap] = await Promise.all([tx.get(usoRef), tx.get(eqRef)]);
+        if (!usoSnap.exists) throw new Error("Uso no encontrado");
+        if (!eqSnap.exists) throw new Error("Equipo no encontrado");
+
+        // Traer reservas >= hoy y filtrar por equipo en cliente
+        const resSnap = await db.collection("reservas").where("fecha", ">=", today).get();
+
+        let hayReservaFutura = false;
+        resSnap.forEach(d=>{
+          const r = d.data();
+          if (r.id_equipo !== codigoEquipo) return;
+          if (r.fecha > today) hayReservaFutura = true;
+          else if (r.fecha === today && hhmmToMinutes(r.hora_fin) > hhmmToMinutes(now)) {
+            hayReservaFutura = true;
+          }
+        });
+
+        tx.update(eqRef, { estado: hayReservaFutura ? "reservado" : "libre" });
+        tx.delete(usoRef); // efímero
+      });
+
+      alert("✅ Uso terminado.");
+    } catch(e){
+      console.error(e);
+      alert("❌ No se pudo terminar el uso: " + e.message);
+    }
+  }
+
+  // ===== Recalcular estado de equipos =====
+  async function recomputeEquipmentStatuses(){
+    const today = hoyStr();
+    const ahora = nowHHMM();
+
+    const rs = await db.collection("reservas").where("fecha", ">=", today).get();
+    const mapEq = new Map(); // codigo -> reservado(bool)
+
+    rs.forEach(d=>{
+      const r = d.data();
+      if (!r.id_equipo || !r.fecha || !r.hora_inicio || !r.hora_fin) return;
+      let reservado = false;
+      if (r.fecha === today){
+        if (hhmmToMinutes(r.hora_fin) > hhmmToMinutes(ahora)) reservado = true;
+      } else if (r.fecha > today) {
+        reservado = true;
+      }
+      if (reservado) mapEq.set(r.id_equipo, true);
+    });
+
+    const batch = db.batch();
+    equiposCache.forEach(e=>{
+      // no tocar si está en uso o en mantenimiento
+      if (equiposEnUso.has(e.codigo)) return;
+      if (e.estado === "mantenimiento") return;
+
+      const reservado = !!mapEq.get(e.codigo);
+      const nuevoEstado = reservado ? "reservado" : "libre";
+      if ((e.estado || "libre") !== nuevoEstado){
+        batch.update(db.collection("equipos").doc(e.codigo), {estado: nuevoEstado});
+      }
+    });
+    try { await batch.commit(); } catch(e){ /* noop */ }
+    renderEquiposTabla(filtroEquipos.value);
+    headerEquipoSeleccionado();
+  }
+
+  // Debounce
+  let recomputeTimer = null;
+  function scheduleRecompute(){
+    if (recomputeTimer) clearTimeout(recomputeTimer);
+    recomputeTimer = setTimeout(()=>{ recomputeEquipmentStatuses(); recomputeTimer=null; }, 400);
+  }
+
+  // Recalcular automáticamente al cambiar reservas
+  db.collection("reservas").onSnapshot(()=> { scheduleRecompute(); });
+
+  // Botón de respaldo
+  btnActualizarEstados.addEventListener("click", async ()=>{
+    await recomputeEquipmentStatuses();
+    alert("🔄 Estados actualizados con éxito.");
+  });
+
+  // ===== Limpieza automática de reservas expiradas =====
+  async function cleanupOldReservations(){
+    const today = hoyStr();
+    const now = nowHHMM();
+
+    const oldSnap = await db.collection("reservas").where("fecha","<",today).get();
+    const todaySnap = await db.collection("reservas").where("fecha","==",today).get();
+
+    const batch = db.batch();
+    oldSnap.forEach(d=> batch.delete(d.ref));
+    todaySnap.forEach(d=>{
+      const r = d.data();
+      if (r.hora_fin && hhmmToMinutes(r.hora_fin) < hhmmToMinutes(now)){
+        batch.delete(d.ref);
+      }
+    });
+    if (!oldSnap.empty || !todaySnap.empty){
+      try { await batch.commit(); } catch(e){ /* noop */ }
+    }
+  }
+
+  // ===== Arranque =====
+ // ...
+// ===== Arranque =====
+ (function defaultDateTime(){
+  const now = new Date(); 
+  // *** LÍNEA CORREGIDA: Usa la función hoyStr() para obtener la fecha local ***
+ const iso = hoyStr(); 
+ 
+ fecha.value = iso;
+ const h = pad(now.getHours());
+ horaInicio.value = `${h}:00`;
+ horaFin.value = `${pad((now.getHours()+1)%24)}:00`;
+})();
+
+
+  // Inicializa listeners
+  swapReservasListener();
+
+  // Safety cada 5 minutos + limpieza de usos vencidos cada minuto
+  setInterval(()=> { recomputeEquipmentStatuses(); cleanupOldReservations(); }, 1*60*1000);
+  setInterval(cleanupUsosVencidosSupervisor, 60*1000);
+
+async function checkPendingReservations20Min(){
+  const now = new Date();
+  const snap = await db.collection("reservas")
+    .where("fecha", ">=", hoyStr()) // reservas de hoy o futuras
+    .get();
+
+  for (const d of snap.docs){
+    const r = d.data();
+    const inicioDT = buildDateTime(r.fecha, r.hora_inicio);
+    const expiraDT = new Date(inicioDT.getTime() + 20*60*1000); // +20 min
+
+    // Verificar si ya pasó 20 min y aún no se ha escaneado
+    const usoSnap = await db.collection("uso_libre")
+      .where("id_equipo", "==", r.id_equipo)
+      .where("fecha", "==", r.fecha)
+      .get();
+
+    if (now >= expiraDT && usoSnap.empty) {
+      const confirmar = confirm(
+        `⏰ La reserva de ${r.nombre_equipo} para ${r.nombre_estudiante} iniciada a las ${r.hora_inicio} ya pasó 20 minutos sin escaneo.\n` +
+        `¿Deseas eliminar esta reserva automáticamente?`
+      );
+      if (confirmar){
+        try{
+          await db.collection("reservas").doc(d.id).delete();
+          console.log(`Reserva ${r.nombre_equipo} eliminada automáticamente.`);
+        } catch(e){
+          console.error("No se pudo eliminar la reserva:", e);
+        }
+      } else {
+        console.log(`Reserva ${r.nombre_equipo} conservada por decisión del usuario.`);
+      }
+    }
+  }
+}
+
+window.addEventListener("load", () => {
+  checkPendingReservations20Min();
+});
+
+  
+</script>
+</body>
+</html>

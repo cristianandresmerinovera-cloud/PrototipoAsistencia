@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Registro de Estudiantes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Librerías necesarias -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script> 
+
+  <style>
+    .menu-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;        /* menos padding */
+  font-size: 12px;     /* letra más pequeña */
+  border-radius: 10px;
+  min-height: 80px;    /* altura más reducida */
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.menu-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+}
+
+.menu-icon {
+  font-size: 30px;     /* ícono más pequeño */
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  margin-bottom: 6px;  /* espacio reducido */
+}
+
+/* Estilo específico para Excel */
+.menu-btn:nth-child(2) .menu-icon {
+  background-color: #217346; /* verde Excel */
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+    :root{
+      --primario:#2563eb; --primario-osc:#1e40af;
+      --bg:#f1f5f9; --texto:#0f172a; --borde:#e2e8f0;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#fff,var(--bg));color:var(--texto); display: none;}
+    .header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--borde);z-index:5}
+    .header-inner{max-width:1100px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand img{height:44px;object-fit:contain}
+    .brand .title{font-weight:700;color:var(--primario-osc)}
+    .brand .subtitle{font-size:.85rem;color:#475569}
+    .container{max-width:1100px;margin:26px auto;padding:0 20px 40px}
+    .card{background:#fff;border:1px solid var(--borde);border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(2,6,23,.06);margin:18px auto}
+    .card h2,.card h3{margin:0 0 10px;color:var(--primario-osc)}
+    .muted{color:#64748b;font-size:.92rem}
+    .menu-grid{display:grid;gap:14px;grid-template-columns:repeat(3,minmax(180px,1fr))}
+    .btn{display:inline-flex;align-items:center;justify-content:center;width:100%;padding:10px 14px;border-radius:12px;border:1px solid transparent;cursor:pointer;font-weight:600;transition:.2s;background:var(--primario);color:#fff}
+    .btn:hover{background:var(--primario-osc)}
+    .btn-outline{background:#fff;color:var(--primario-osc);border-color:var(--primario)}
+    .btn-outline:hover{background:#eef2ff}
+    .btn-ghost{background:transparent;color:var(--primario-osc)}
+    form{width:100%}
+    .form-grid{display:grid;gap:10px;grid-template-columns:1fr 1fr;max-width:720px}
+    .form-grid .full{grid-column:1 / -1}
+    .input, select{
+      width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--borde);
+      font-size:15px;outline:none;transition:border-color .15s, box-shadow .15s
+    }
+    .input:focus, select:focus{border-color:var(--primario);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+    /* Secciones exclusivas */
+    #seccion-manual, #seccion-excel { display:none; }
+    #excelActions{display:grid;gap:10px;grid-template-columns:1fr 1fr;display:none}
+    .footer{text-align:center;color:#94a3b8;font-size:.82rem;padding:20px 10px 40px}
+    .pill{display:inline-block;padding:4px 10px;border:1px solid var(--borde);border-radius:999px;background:#f8fafc;margin-right:8px}
+    .table{width:100%;border-collapse:collapse;margin-top:8px}
+    .table th,.table td{border:1px solid var(--borde);padding:8px;text-align:left;font-size:14px}
+    .section-sub{margin-top:12px;padding:10px;border:1px solid var(--borde);border-radius:10px;background:#fff}
+    @media (max-width:720px){ .menu-grid{grid-template-columns:1fr} .form-grid{grid-template-columns:1fr} .brand img{height:38px} }
+  </style>
+</head>
+<body>
+<header class="header" style="background:#fff; border-bottom:1px solid #e2e8f0; padding:10px 20px;">
+  <div class="header-inner" style="display:flex; align-items:center; justify-content:space-between; max-width:1100px; margin:0 auto;">
+    <div class="brand" style="display:flex; align-items:center; gap:12px;">
+      <img src="logounl.png" alt="Logo UNL" style="height:48px; width:auto;">
+      <div style="line-height:1.2;">
+        <div class="t1" style="font-size:1.1rem; font-weight:700; color:#1e40af;">Registro de Estudiantes</div>
+        <div class="t2" style="font-size:0.85rem; color:#475569;">Laboratorio • Facultad de Energía, Industrias y Recursos Naturales</div>
+      </div>
+    </div>
+    <img src="logocit.png" alt="Logo laboratorio" style="height:48px; width:auto;">
+  </div>
+</header>
+<div style="text-align:center; margin-bottom:15px; display: flex; justify-content: center; gap: 20px;">
+    <button id="btnRegresar" style="padding: 8px 12px; background-color: #261cb7; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="window.location.href='portal.html'">
+        🔙 Regresar al portal
+    </button>
+    
+    <button id="btnLogout" style="padding: 8px 12px; background-color: #0f8a42; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="firebase.auth().signOut().then(() => { window.location.href = 'login.html'; })">
+        🚪 Cerrar Sesión
+    </button>
+</div>
+<main class="container">
+  <!-- Menú principal -->
+  <section id="seccion-menu" class="card" aria-labelledby="titulo-menu">
+    <h2 id="titulo-menu">Menú principal</h2>
+    <p class="muted">Elige cómo deseas registrar estudiantes.</p>
+    <div class="menu-grid" role="group" aria-label="Acciones">
+     
+  <button class="btn" onclick="irA('manual')">
+    <div class="menu-icon">📝</div>
+    Registro manual
+  </button>
+
+  <button class="btn-outline menu-btn" onclick="irA('excel')">
+    <div class="menu-icon">X</div>
+    Cargar desde Excel
+  </button>
+
+  <button class="btn" onclick="irA('gestion')">
+    <div class="menu-icon">👤</div>
+    Gestionar estudiantes
+  </button>
+
+</div>
+
+    </div>
+  </section>
+
+  <!-- Registro MANUAL (con ciclo/asignatura/profesor) -->
+  <section id="seccion-manual" class="card" aria-labelledby="titulo-manual">
+    <h3 id="titulo-manual">Registro manual</h3>
+    <p class="muted" style="margin-top:0">Campos clave marcados con *.</p>
+
+    <form id="formRegistro" onsubmit="return false">
+      <div class="form-grid">
+        <input class="input full" type="text" id="nombre" placeholder='Nombre completo * (p.ej. "MERINO VERA CRISTIAN ANDRES")' required>
+        <input class="input" type="text" id="cedula" placeholder="Cédula * (p.ej. 0750943599)" required>
+        <input class="input" type="text" id="celular" placeholder="Celular">
+        <input class="input" type="email" id="correo_personal" placeholder="Correo personal">
+        <input class="input" type="email" id="correo_institucional" placeholder="Correo institucional">
+        <input class="input" type="text" id="canton_actual" placeholder="Cantón actual">
+
+       <!-- NUEVO: Selección Ciclo / Asignatura / Profesor -->
+<div class="full nice-box" style="margin-top:12px;padding:16px;border-radius:14px;border:1px solid #ddd;background:#fafafa">
+
+  <label style="font-weight:700;display:block;margin-bottom:10px;font-size:17px">
+    Ciclos / Asignaturas
+  </label>
+
+  <!-- Ciclos -->
+  <div id="ciclosChecklist" style="margin-bottom:18px">
+    <label class="sub-title">Ciclos</label>
+    <div class="tags-grid">
+      <label class="tag-check"><input type="checkbox" value="1"> 1</label>
+      <label class="tag-check"><input type="checkbox" value="2"> 2</label>
+      <label class="tag-check"><input type="checkbox" value="3"> 3</label>
+      <label class="tag-check"><input type="checkbox" value="4"> 4</label>
+      <label class="tag-check"><input type="checkbox" value="5"> 5</label>
+      <label class="tag-check"><input type="checkbox" value="6"> 6</label>
+      <label class="tag-check"><input type="checkbox" value="7"> 7</label>
+      <label class="tag-check"><input type="checkbox" value="8"> 8</label>
+      <label class="tag-check"><input type="checkbox" value="9"> 9</label>
+    </div>
+  </div>
+
+  <!-- Asignaturas -->
+  <div id="asignaturasChecklist" class="nice-box" style="padding:12px;margin-top:12px;border:1px dashed #ccc;border-radius:10px;background:#fff"></div>
+
+ 
+
+  <div id="asigHintManual" style="display:none;color:#d9534f;margin-top:6px;font-size:14px">
+    No se encontraron asignaturas.
+  </div>
+</div>
+
+
+      <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;margin-top:12px;max-width:520px">
+        <button type="submit" class="btn">Guardar estudiante</button>
+        <button type="button" class="btn-ghost" onclick="irA('menu')">Volver</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- CARGA DESDE EXCEL (como lo tenías) -->
+  <section id="seccion-excel" class="card" aria-labelledby="titulo-excel">
+    <h3 id="titulo-excel">Carga masiva desde Excel</h3>
+    <p class="muted" style="margin-top:0">
+      Se mantiene el flujo existente: hoja 1, datos desde fila 12 (columnas C→Q).
+    </p>
+
+    <input class="input" type="file" id="excelUploader" accept=".xlsx" aria-label="Subir archivo Excel">
+
+    <!-- Meta (profesor, ciclo) y selector de asignatura -->
+    <div id="excelMeta" class="section-sub" style="display:none">
+      <div style="margin-bottom:8px">
+        <span class="pill">Profesor: <strong id="metaProfesor"></strong></span>
+        <span class="pill">Ciclo: <strong id="metaCiclo"></strong></span>
+      </div>
+      <label for="selectAsignatura" style="font-weight:600">Asignatura</label>
+      <select id="selectAsignatura" class="input" style="margin-top:6px">
+        <option value="">— Selecciona una asignatura —</option>
+      </select>
+      <div id="asigHint" class="muted" style="margin-top:6px;display:none">No se encontraron asignaturas para este profesor/ciclo.</div>
+    </div>
+
+    <!-- Listado de estudiantes leídos -->
+    <div id="excelList" class="section-sub" style="display:none">
+      <div style="font-weight:600;margin-bottom:6px">Estudiantes leídos</div>
+      <div style="max-height:260px;overflow:auto;border:1px solid var(--borde);border-radius:10px">
+        <table class="table">
+          <thead>
+            <tr><th>Nombre</th><th>Cédula</th></tr>
+          </thead>
+          <tbody id="excelListBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="excelActions" style="margin-top:10px;display:grid;gap:10px;grid-template-columns:1fr 1fr;">
+      <button class="btn" onclick="confirmarCarga()">Subir estudiantes</button>
+      <button class="btn-ghost" onclick="cancelarCarga()">Cancelar</button>
+    </div>
+    <div style="margin-top:12px;max-width:520px">
+      <button class="btn-outline" onclick="irA('menu')">Volver</button>
+    </div>
+  </section>
+  <!-- GESTIÓN DE ESTUDIANTES -->
+<section id="seccion-gestion" class="card" aria-labelledby="titulo-gestion" style="display:none">
+  <h3 id="titulo-gestion">Buscar / Editar / Eliminar estudiantes</h3>
+  <p class="muted" style="margin-top:0">Busca por cédula o apedillo.</p>
+
+  <div style="display:flex; gap:10px; max-width:500px; margin-bottom:12px;">
+    <input class="input" type="text" id="busqueda" placeholder="Buscar estudiante...">
+    <button class="btn" onclick="buscarEstudiante()">Buscar</button>
+  </div>
+
+  <div id="resultadoBusqueda" style="display:none; margin-top:16px;">
+    <table class="table">
+      <thead>
+        <tr><th>Nombre</th><th>Cédula</th><th>Acciones</th></tr>
+      </thead>
+      <tbody id="tablaResultados"></tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:14px;">
+    <button class="btn-ghost" onclick="irA('menu')">Volver</button>
+  </div>
+</section>
+<!-- Modal para ver/editar estudiante -->
+<div id="modalEstudiante" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;z-index:1000;">
+  <div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;width:90%;position:relative;">
+    <button onclick="cerrarModal()" style="position:absolute;top:10px;right:10px;font-size:18px;background:none;border:none;cursor:pointer;">✖️</button>
+    <h3 id="modalNombre"></h3>
+   <!-- <img id="modalFoto" src="" alt="Foto estudiante" style="width:120px;height:120px;object-fit:cover;border-radius:50%;margin-bottom:12px;">-->
+    <div style="display:grid;gap:8px;margin-bottom:12px;">
+      <input class="input" id="modalCedula" placeholder="Cédula">
+      <input class="input" id="modalCelular" placeholder="Celular">
+      <input class="input" id="modalCorreoPersonal" placeholder="Correo personal">
+      <input class="input" id="modalCorreoInstitucional" placeholder="Correo institucional">
+      <input class="input" id="modalCanton" placeholder="Cantón">
+      <input class="input" id="modalGenero" placeholder="Género">
+      <input class="input" id="modalEstadoCivil" placeholder="Estado civil">
+      <input class="input" id="modalFechaNacimiento" placeholder="Fecha de nacimiento">
+      <input class="input" id="modalNacionalidad" placeholder="Nacionalidad">
+      <input class="input" id="modalProvincia" placeholder="Provincia actual">
+      <input class="input" id="modalParroquia" placeholder="Parroquia actual">
+      <input class="input" id="modalDireccion" placeholder="Dirección actual">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn" onclick="guardarEdicion()">💾 Guardar</button>
+      <button class="btn-ghost" onclick="eliminarEstudianteActual()">🗑️ Eliminar</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer class="footer">
+  © <span id="year"></span> — Registro de Estudiantes • Uso académico
+</footer>
+
+<script>
+  // ----- Firebase (igual) -----
+  const firebaseConfig = {
+    apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+    authDomain: "escaner-qr-d7d65.firebaseapp.com",
+    projectId: "escaner-qr-d7d65",
+    storageBucket: "escaner-qr-d7d65.appspot.com",
+    messagingSenderId: "982923527298",
+    appId: "1:982923527298:web:df13850f38d847cfdae09b"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  // Nota: Asume que firebase.auth() se inicializa más abajo
+  // o en el <head> si usaste la compat library.
+
+  // ----- Estado -----
+  let estudiantesPendientes = [];
+  //let id_registro = 1;
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  // Meta leída del Excel
+  let metaExcel = { ciclo: null, profesor: "" };
+
+  // ----- Helpers comunes (se mantienen) -----
+  function leerTextoCelda(hoja, ref){
+    const c = hoja?.[ref];
+    return (c?.w ?? c?.v ?? "").toString().trim();
+  }
+  function extraerCicloDesde(texto){
+    const m = texto.match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  }
+  function normalizarNombreConIng(textoDocente){
+    // quita "Docente:" y pasa a "Ing. Nombre Apellido"
+    let base = textoDocente.replace(/^\s*docente\s*[:\-]?\s*/i, "").trim().toLowerCase();
+    base = base.split(/\s+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+    return `Ing. ${base}`.trim();
+  }
+  function renderListaEstudiantes(rows){
+    const tbody = document.getElementById("excelListBody");
+    tbody.innerHTML = "";
+    rows.forEach(r => {
+      const ced = (r["C"] ?? "").toString().trim();
+      const nom = (r["D"] ?? "").toString().trim();
+      if(!ced && !nom) return;
+      const tr = document.createElement("tr");
+      const tdN = document.createElement("td"); tdN.textContent = nom;
+      const tdC = document.createElement("td"); tdC.textContent = ced.length===9?("0"+ced):ced;
+      tr.appendChild(tdN); tr.appendChild(tdC);
+      tbody.appendChild(tr);
+    });
+    document.getElementById("excelList").style.display = "block";
+  }
+
+  async function cargarAsignaturasParaMeta(){
+    const metaBox = document.getElementById("excelMeta");
+    const sel = document.getElementById("selectAsignatura");
+    const hint = document.getElementById("asigHint");
+    sel.innerHTML = '<option value="">— Selecciona una asignatura —</option>';
+    hint.style.display = "none";
+
+    if(!Number.isFinite(metaExcel.ciclo) || !metaExcel.profesor){
+      metaBox.style.display = "none";
+      return;
+    }
+    document.getElementById("metaProfesor").textContent = metaExcel.profesor;
+    document.getElementById("metaCiclo").textContent = metaExcel.ciclo;
+    metaBox.style.display = "block";
+
+    const qSnap = await db.collection("clases_definidas")
+      .where("ciclo","==", String(metaExcel.ciclo))
+      .where("profesor","==", metaExcel.profesor)
+      .get();
+
+    if(qSnap.empty){
+      hint.style.display = "block";
+      return;
+    }
+    qSnap.forEach(doc => {
+      const data = doc.data();
+      const opt = document.createElement("option");
+      opt.value = data.asignatura;
+      opt.textContent = data.asignatura;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ----- Navegación (Se mantiene la función, la llamada se mueve) -----
+  function irA(seccion){
+    document.getElementById("seccion-menu").style.display = "none";
+    document.getElementById("seccion-manual").style.display = "none";
+    document.getElementById("seccion-excel").style.display = "none";
+    document.getElementById("seccion-gestion").style.display = "none";
+    if(seccion === 'menu')  document.getElementById("seccion-menu").style.display = "block";
+    if(seccion === 'manual')document.getElementById("seccion-manual").style.display = "block";
+    if(seccion === 'excel') document.getElementById("seccion-excel").style.display = "block";
+    if(seccion === 'gestion') document.getElementById("seccion-gestion").style.display = "block";
+  }
+  // irA('menu'); // 🛑 ESTA LLAMADA SE MUEVE a inicializarGestion()
+
+  // ====== EXCEL (lo existente) ======
+  // 🛑 Los event listeners se MOVERÁN a inicializarGestion()
+
+  document.getElementById("excelUploader")?.addEventListener("change", async function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const hoja = workbook.Sheets[workbook.SheetNames[0]];
+
+    const textoCiclo   = leerTextoCelda(hoja, "D4");
+    const textoDocente = leerTextoCelda(hoja, "D9");
+    metaExcel.ciclo    = extraerCicloDesde(textoCiclo);
+    metaExcel.profesor = normalizarNombreConIng(textoDocente);
+
+    console.log("Ciclo leído:", metaExcel.ciclo, "Profesor leído:", metaExcel.profesor);
+
+    estudiantesPendientes = XLSX.utils.sheet_to_json(hoja, { range: 11, header: "A" });
+    renderListaEstudiantes(estudiantesPendientes);
+
+    document.getElementById("excelActions").style.display = "grid";
+    await cargarAsignaturasParaMeta();
+  });
+
+  function cancelarCarga() {
+    estudiantesPendientes = [];
+    document.getElementById("excelUploader").value = null;
+    document.getElementById("excelActions").style.display = "none";
+    document.getElementById("excelMeta").style.display = "none";
+    document.getElementById("excelList").style.display = "none";
+    document.getElementById("excelListBody").innerHTML = "";
+    document.getElementById("selectAsignatura").innerHTML = '<option value="">— Selecciona una asignatura —</option>';
+    alert("❌ Carga cancelada");
+  }
+
+  async function confirmarCarga() {
+    const asignaturaSel = document.getElementById("selectAsignatura").value;
+    if(!asignaturaSel){
+      alert("Selecciona una asignatura antes de subir.");
+      return;
+    }
+
+    let nuevos = 0;
+    let actualizados = 0;
+
+    for (const row of estudiantesPendientes) {
+      let cedula = row["C"]?.toString().trim();
+      if (cedula && cedula.length === 9) cedula = "0" + cedula;
+      if (!cedula) continue;
+
+      const docRef = db.collection("estudiantes").doc(cedula);
+      const docSnap = await docRef.get();
+
+      const datosExcel = {
+        cedula,
+        nombre: row["D"]?.toString().trim() || "",
+        genero: row["E"]?.toString().trim() || "",
+        correo_institucional: row["F"]?.toString().trim() || "",
+        correo_personal: row["G"]?.toString().trim() || "",
+        celular: row["H"]?.toString().trim() || "",
+        telefono: row["I"]?.toString().trim() || "",
+        estado_civil: row["J"]?.toString().trim() || "",
+        etnia: row["K"]?.toString().trim() || "",
+        fecha_nacimiento: row["L"]?.toString().trim() || "",
+        nacionalidad: row["M"]?.toString().trim() || "",
+        provincia_actual: row["N"]?.toString().trim() || "",
+        canton_actual: row["O"]?.toString().trim() || "",
+        parroquia_actual: row["P"]?.toString().trim() || "",
+        direccion_actual: row["Q"]?.toString().trim() || ""
+      };
+
+      const nuevaAsignacion = {
+        ciclo: Number.isFinite(metaExcel.ciclo) ? metaExcel.ciclo : null,
+        profesor: metaExcel.profesor || "",
+        asignatura: asignaturaSel || ""
+      };
+
+      if (docSnap.exists) {
+        const dataActual = docSnap.data();
+        let asignaciones = Array.isArray(dataActual.asignaciones) ? dataActual.asignaciones : [];
+        let ciclosIdx    = Array.isArray(dataActual.ciclos) ? dataActual.ciclos : [];
+        let profesoresIdx = Array.isArray(dataActual.profesores) ? dataActual.profesores : [];
+
+        const existeAsignacion = asignaciones.some(a =>
+          a.ciclo === nuevaAsignacion.ciclo &&
+          a.profesor === nuevaAsignacion.profesor &&
+          a.asignatura === nuevaAsignacion.asignatura
+        );
+        if (!existeAsignacion) asignaciones.push(nuevaAsignacion);
+
+        if (Number.isFinite(nuevaAsignacion.ciclo) && !ciclosIdx.includes(nuevaAsignacion.ciclo)) ciclosIdx.push(nuevaAsignacion.ciclo);
+        if (nuevaAsignacion.profesor && !profesoresIdx.includes(nuevaAsignacion.profesor)) profesoresIdx.push(nuevaAsignacion.profesor);
+
+        await docRef.update({
+          ...datosExcel,
+          asignaciones,
+          ciclos: ciclosIdx,
+          profesores: profesoresIdx
+        });
+
+        actualizados++;
+
+      } else {
+        
+
+        const estudianteNuevo = {
+          ...datosExcel,
+          //id_registro: idAsignado,
+          asignaciones: [nuevaAsignacion],
+          ciclos: Number.isFinite(nuevaAsignacion.ciclo) ? [nuevaAsignacion.ciclo] : [],
+          profesores: nuevaAsignacion.profesor ? [nuevaAsignacion.profesor] : []
+        };
+
+        await docRef.set(estudianteNuevo);
+       
+
+        nuevos++;
+      }
+    }
+
+    estudiantesPendientes = [];
+    document.getElementById("excelUploader").value = null;
+    document.getElementById("excelActions").style.display = "none";
+    document.getElementById("excelMeta").style.display = "none";
+    document.getElementById("excelList").style.display = "none";
+    document.getElementById("excelListBody").innerHTML = "";
+    document.getElementById("selectAsignatura").innerHTML = '<option value="">— Selecciona una asignatura —</option>';
+
+    alert(`✅ Procesados: ${nuevos + actualizados}\n🆕 Nuevos: ${nuevos}\n🔁 Actualizados: ${actualizados}`);
+  }
+
+ // ====== MANUAL: lógica de ciclo/asignatura/profesor con checklists y profesor visible ======
+const ciclosChecklistEl = document.getElementById('ciclosChecklist');
+const asignaturasChecklistEl = document.getElementById('asignaturasChecklist');
+const asigHintManualEl = document.getElementById('asigHintManual');
+
+let items = []; // asignaturas cargadas según ciclos seleccionados
+
+// 🛑 Los event listeners se MOVERÁN a inicializarGestion()
+ciclosChecklistEl?.addEventListener('change', async () => {
+
+  asignaturasChecklistEl.innerHTML = '';
+  asigHintManualEl.style.display = 'none';
+
+  // ciclos seleccionados
+  const ciclosSel = Array.from(
+    ciclosChecklistEl.querySelectorAll('input:checked')
+  ).map(c => c.value);
+
+  if (ciclosSel.length === 0) return;
+
+  items = [];
+
+  // cargar asignaturas desde Firestore
+  for (const ciclo of ciclosSel) {
+
+    const qSnap = await db.collection('clases_definidas')
+      .where('ciclo', '==', ciclo)
+      .get();
+
+    qSnap.forEach(doc => {
+      const data = doc.data();
+      items.push({
+        ciclo,
+        asignatura: data.asignatura,
+        profesor: data.profesor
+      });
+    });
+  }
+
+  // si no hay asignaturas
+  if (items.length === 0) {
+    asigHintManualEl.style.display = 'block';
+    return;
+  }
+
+  asignaturasChecklistEl.innerHTML = '';
+
+  // Mostrar agrupadas por ciclo
+  ciclosSel.forEach(ciclo => {
+    const grupo = items.filter(i => i.ciclo === ciclo);
+    if (grupo.length === 0) return;
+
+    const box = document.createElement('div');
+    box.style.marginBottom = '12px';
+
+    const title = document.createElement('div');
+    title.textContent = `Ciclo ${ciclo}`;
+    title.style.fontWeight = '600';
+    title.style.marginBottom = '6px';
+    box.appendChild(title);
+
+    grupo.forEach(i => {
+      const lbl = document.createElement('label');
+      lbl.style.display = 'block';
+      lbl.style.marginLeft = '14px';
+      lbl.style.marginBottom = '3px';
+
+      lbl.innerHTML = `
+        <input type="checkbox" value="${i.ciclo}||${i.asignatura}">
+        ${i.asignatura} 
+        <span style="color:#777;font-size:0.9em">(${i.profesor})</span>
+      `;
+
+      // CUANDO SELECCIONE UNA ASIGNATURA → pones profesor automáticamente
+      lbl.querySelector("input")?.addEventListener("change", (e) => {
+        if (e.target.checked) {
+          // Se asume que 'profesorManualEl' es el input de profesor en el formulario manual,
+          // aunque no está declarado en el código provisto. Usaremos un selector si existe.
+          document.getElementById("profesorManual") && (document.getElementById("profesorManual").value = i.profesor);
+        }
+      });
+
+      box.appendChild(lbl);
+    });
+
+    asignaturasChecklistEl.appendChild(box);
+  });
+});
+
+
+// ----- Registro manual -----
+// 🛑 Los event listeners se MOVERÁN a inicializarGestion()
+document.getElementById("formRegistro")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const nombre = document.getElementById("nombre").value.trim();
+  let cedula = document.getElementById("cedula").value.trim();
+  if (cedula.length === 9) cedula = "0" + cedula;
+
+  const asignaturasSeleccionadas = Array.from(
+    asignaturasChecklistEl.querySelectorAll('input:checked')
+  ).map(i => {
+    const [ciclo, asignatura] = i.value.split("||");
+    const prof = items.find(x => x.ciclo === ciclo && x.asignatura === asignatura);
+    return {
+      ciclo: Number(ciclo),
+      asignatura,
+      profesor: prof ? prof.profesor : ""
+    };
+  });
+
+  if (asignaturasSeleccionadas.length === 0) {
+    alert("Selecciona al menos una asignatura.");
+    return;
+  }
+
+  const payload = {
+    nombre,
+    cedula,
+    celular: document.getElementById("celular").value.trim() || "",
+    correo_personal: document.getElementById("correo_personal").value.trim() || "",
+    correo_institucional: document.getElementById("correo_institucional").value.trim() || "",
+    canton_actual: document.getElementById("canton_actual").value.trim() || ""
+  };
+
+  const docRef = db.collection("estudiantes").doc(cedula);
+  const docSnap = await docRef.get();
+
+  if (docSnap.exists) {
+    const dataActual = docSnap.data();
+    let asignaciones = Array.isArray(dataActual.asignaciones) ? dataActual.asignaciones : [];
+
+    asignaturasSeleccionadas.forEach(a => {
+      const ya = asignaciones.some(x =>
+        x.ciclo === a.ciclo &&
+        x.asignatura === a.asignatura &&
+        x.profesor === a.profesor
+      );
+      if (!ya) asignaciones.push(a);
+    });
+
+    await docRef.update({
+      ...payload,
+      asignaciones,
+      ciclos: [...new Set(asignaciones.map(a => a.ciclo))],
+      profesores: [...new Set(asignaciones.map(a => a.profesor))]
+    });
+
+    alert("✅ Estudiante actualizado");
+
+  } else {
+
+    await docRef.set({
+      ...payload,
+      asignaciones: asignaturasSeleccionadas,
+      ciclos: [...new Set(asignaturasSeleccionadas.map(a => a.ciclo))],
+      profesores: [...new Set(asignaturasSeleccionadas.map(a => a.profesor))]
+    });
+
+    alert("✅ Estudiante registrado");
+  }
+
+  document.getElementById("formRegistro").reset();
+  asignaturasChecklistEl.innerHTML = '';
+  asigHintManualEl.style.display = 'none';
+});
+
+// ====== GESTIÓN DE ESTUDIANTES (se mantiene la lógica) ======
+async function buscarEstudiante(){
+  const term = document.getElementById("busqueda").value.trim().toLowerCase();
+  if(!term){ alert("Ingrese una cédula o nombre para buscar."); return; }
+
+  let resultados = [];
+
+  // Buscar por cédula exacta
+  const docCed = await db.collection("estudiantes").doc(term).get();
+  if(docCed.exists){
+    resultados.push({ id: docCed.id, ...docCed.data() });
+  } else {
+    // Buscar por nombre (inicia con)
+    const snap = await db.collection("estudiantes")
+      .orderBy("nombre")
+      .startAt(term.toUpperCase())
+      .endAt(term.toUpperCase() + "\uf8ff")
+      .get();
+
+    snap.forEach(d => resultados.push({ id: d.id, ...d.data() }));
+  }
+
+  const tabla = document.getElementById("tablaResultados");
+  tabla.innerHTML = "";
+  if(resultados.length === 0){
+    tabla.innerHTML = `<tr><td colspan="3">No se encontraron resultados.</td></tr>`;
+  } else {
+    resultados.forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.nombre}</td>
+        <td>${r.cedula}</td>
+        <td>
+          <button class="btn" onclick="editarEstudiante('${r.id}')">Ver / Editar</button>
+          <button class="btn btn-red" onclick="eliminarEstudiante('${r.id}')">Eliminar</button>
+        </td>
+      `;
+      tabla.appendChild(tr);
+    });
+  }
+
+  document.getElementById("resultadoBusqueda").style.display = "block";
+}
+
+async function eliminarEstudiante(id){
+  if(!confirm("¿Seguro que deseas eliminar este estudiante?")) return;
+
+  await db.collection("estudiantes").doc(id).delete();
+
+  // También eliminar del índice de huellas si existe (comentado en el código original)
+  //const indiceSnap = await db.collection("indice_huellas").where("cedula","==",id).get();
+  //indiceSnap.forEach(async d => await db.collection("indice_huellas").doc(d.id).delete());
+
+  alert("🗑️ Estudiante eliminado correctamente.");
+  buscarEstudiante(); // refresca la lista
+}
+
+let estudianteActualId = null; // guarda ID del estudiante abierto en el modal
+
+// Abre el modal con todos los datos
+async function editarEstudiante(id){
+  const docSnap = await db.collection("estudiantes").doc(id).get();
+  if(!docSnap.exists){ alert("Estudiante no encontrado."); return; }
+  const data = docSnap.data();
+  estudianteActualId = id;
+
+  document.getElementById("modalNombre").textContent = data.nombre || "";
+  //document.getElementById("modalFoto").src = data.foto || "placeholder.png"; // foto o placeholder
+  document.getElementById("modalCedula").value = data.cedula || "";
+  document.getElementById("modalCelular").value = data.celular || "";
+  document.getElementById("modalCorreoPersonal").value = data.correo_personal || "";
+  document.getElementById("modalCorreoInstitucional").value = data.correo_institucional || "";
+  document.getElementById("modalCanton").value = data.canton_actual || "";
+  document.getElementById("modalGenero").value = data.genero || "";
+  document.getElementById("modalEstadoCivil").value = data.estado_civil || "";
+  document.getElementById("modalFechaNacimiento").value = data.fecha_nacimiento || "";
+  document.getElementById("modalNacionalidad").value = data.nacionalidad || "";
+  document.getElementById("modalProvincia").value = data.provincia_actual || "";
+  document.getElementById("modalParroquia").value = data.parroquia_actual || "";
+  document.getElementById("modalDireccion").value = data.direccion_actual || "";
+
+  document.getElementById("modalEstudiante").style.display = "flex";
+}
+
+// Guardar edición
+async function guardarEdicion(){
+  if(!estudianteActualId) return;
+  await db.collection("estudiantes").doc(estudianteActualId).update({
+    nombre: document.getElementById("modalNombre").textContent,
+    cedula: document.getElementById("modalCedula").value.trim(),
+    celular: document.getElementById("modalCelular").value.trim(),
+    correo_personal: document.getElementById("modalCorreoPersonal").value.trim(),
+    correo_institucional: document.getElementById("modalCorreoInstitucional").value.trim(),
+    canton_actual: document.getElementById("modalCanton").value.trim(),
+    genero: document.getElementById("modalGenero").value.trim(),
+    estado_civil: document.getElementById("modalEstadoCivil").value.trim(),
+    fecha_nacimiento: document.getElementById("modalFechaNacimiento").value.trim(),
+    nacionalidad: document.getElementById("modalNacionalidad").value.trim(),
+    provincia_actual: document.getElementById("modalProvincia").value.trim(),
+    parroquia_actual: document.getElementById("modalParroquia").value.trim(),
+    direccion_actual: document.getElementById("modalDireccion").value.trim(),
+  });
+  alert("✅ Datos actualizados.");
+  cerrarModal();
+  buscarEstudiante();
+}
+
+// Cerrar modal
+function cerrarModal(){
+  estudianteActualId = null;
+  document.getElementById("modalEstudiante").style.display = "none";
+}
+
+// Eliminar desde modal
+async function eliminarEstudianteActual(){
+  if(!estudianteActualId) return;
+  if(!confirm("¿Seguro que deseas eliminar este estudiante?")) return;
+  await db.collection("estudiantes").doc(estudianteActualId).delete();
+  alert("🗑️ Estudiante eliminado.");
+  cerrarModal();
+  buscarEstudiante();
+}
+
+// ************************************************************
+// 1. FUNCIÓN WRAPPER DE INICIALIZACIÓN
+// ************************************************************
+/**
+ * Contiene la lógica de inicialización y asignación de eventos.
+ */
+function inicializarGestion(){
+    // Iniciar en la pantalla del menú
+    irA('menu'); 
+    
+    // Asignar eventos de navegación (asumiendo que los botones existen)
+    document.getElementById("btnIrManual")?.addEventListener('click', () => irA('manual'));
+    document.getElementById("btnIrExcel")?.addEventListener('click', () => irA('excel'));
+    document.getElementById("btnIrGestion")?.addEventListener('click', () => irA('gestion'));
+
+    // Asignar eventos de botones de Excel
+    document.getElementById("btnCancelarCarga")?.addEventListener('click', cancelarCarga);
+    document.getElementById("btnConfirmarCarga")?.addEventListener('click', confirmarCarga);
+
+    // Asignar evento de búsqueda
+    document.getElementById("formBusqueda")?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        buscarEstudiante();
+    });
+
+    // Asignar eventos de modal (asumiendo IDs en el HTML)
+    document.getElementById("modalGuardar")?.addEventListener('click', guardarEdicion);
+    document.getElementById("modalCerrar")?.addEventListener('click', cerrarModal);
+    document.getElementById("modalEliminar")?.addEventListener('click', eliminarEstudianteActual);
+
+
+    // Re-asignar Event Listeners de la sección MANUAL (donde estaban originalmente)
+    if(ciclosChecklistEl) {
+        // Clonar el nodo para eliminar listeners anteriores y re-asignar
+        const newCiclosChecklistEl = ciclosChecklistEl.cloneNode(true);
+        ciclosChecklistEl.parentNode.replaceChild(newCiclosChecklistEl, ciclosChecklistEl);
+        newCiclosChecklistEl.addEventListener('change', async () => {
+            // Se mantiene el código de la función anonima 'change' del código original
+            // ... (el cuerpo de la funcion change del ciclo)
+            asignaturasChecklistEl.innerHTML = '';
+            asigHintManualEl.style.display = 'none';
+
+            // ciclos seleccionados
+            const ciclosSel = Array.from(
+                newCiclosChecklistEl.querySelectorAll('input:checked')
+            ).map(c => c.value);
+
+            if (ciclosSel.length === 0) return;
+
+            items = [];
+
+            // cargar asignaturas desde Firestore
+            for (const ciclo of ciclosSel) {
+
+                const qSnap = await db.collection('clases_definidas')
+                .where('ciclo', '==', ciclo)
+                .get();
+
+                qSnap.forEach(doc => {
+                    const data = doc.data();
+                    items.push({
+                        ciclo,
+                        asignatura: data.asignatura,
+                        profesor: data.profesor
+                    });
+                });
+            }
+
+            // si no hay asignaturas
+            if (items.length === 0) {
+                asigHintManualEl.style.display = 'block';
+                return;
+            }
+
+            asignaturasChecklistEl.innerHTML = '';
+
+            // Mostrar agrupadas por ciclo
+            ciclosSel.forEach(ciclo => {
+                const grupo = items.filter(i => i.ciclo === ciclo);
+                if (grupo.length === 0) return;
+
+                const box = document.createElement('div');
+                box.style.marginBottom = '12px';
+
+                const title = document.createElement('div');
+                title.textContent = `Ciclo ${ciclo}`;
+                title.style.fontWeight = '600';
+                title.style.marginBottom = '6px';
+                box.appendChild(title);
+
+                grupo.forEach(i => {
+                    const lbl = document.createElement('label');
+                    lbl.style.display = 'block';
+                    lbl.style.marginLeft = '14px';
+                    lbl.style.marginBottom = '3px';
+
+                    lbl.innerHTML = `
+                        <input type="checkbox" value="${i.ciclo}||${i.asignatura}">
+                        ${i.asignatura} 
+                        <span style="color:#777;font-size:0.9em">(${i.profesor})</span>
+                    `;
+
+                    // CUANDO SELECCIONE UNA ASIGNATURA → pones profesor automáticamente
+                    lbl.querySelector("input")?.addEventListener("change", (e) => {
+                        if (e.target.checked) {
+                             document.getElementById("profesorManual") && (document.getElementById("profesorManual").value = i.profesor);
+                        }
+                    });
+
+                    box.appendChild(lbl);
+                });
+
+                asignaturasChecklistEl.appendChild(box);
+            });
+            // ... (fin del cuerpo de la funcion change del ciclo)
+        });
+    }
+
+    document.getElementById("formRegistro")?.addEventListener("submit", async function (e) {
+        // Se mantiene el código de la función anonima 'submit' del código original
+        // ... (cuerpo de la funcion submit)
+        e.preventDefault();
+
+        const nombre = document.getElementById("nombre").value.trim();
+        let cedula = document.getElementById("cedula").value.trim();
+        if (cedula.length === 9) cedula = "0" + cedula;
+
+        const asignaturasSeleccionadas = Array.from(
+            asignaturasChecklistEl.querySelectorAll('input:checked')
+        ).map(i => {
+            const [ciclo, asignatura] = i.value.split("||");
+            const prof = items.find(x => x.ciclo === ciclo && x.asignatura === asignatura);
+            return {
+                ciclo: Number(ciclo),
+                asignatura,
+                profesor: prof ? prof.profesor : ""
+            };
+        });
+
+        if (asignaturasSeleccionadas.length === 0) {
+            alert("Selecciona al menos una asignatura.");
+            return;
+        }
+
+        const payload = {
+            nombre,
+            cedula,
+            celular: document.getElementById("celular").value.trim() || "",
+            correo_personal: document.getElementById("correo_personal").value.trim() || "",
+            correo_institucional: document.getElementById("correo_institucional").value.trim() || "",
+            canton_actual: document.getElementById("canton_actual").value.trim() || ""
+        };
+
+        const docRef = db.collection("estudiantes").doc(cedula);
+        const docSnap = await docRef.get();
+
+        if (docSnap.exists) {
+            const dataActual = docSnap.data();
+            let asignaciones = Array.isArray(dataActual.asignaciones) ? dataActual.asignaciones : [];
+
+            asignaturasSeleccionadas.forEach(a => {
+                const ya = asignaciones.some(x =>
+                    x.ciclo === a.ciclo &&
+                    x.asignatura === a.asignatura &&
+                    x.profesor === a.profesor
+                );
+                if (!ya) asignaciones.push(a);
+            });
+
+            await docRef.update({
+                ...payload,
+                asignaciones,
+                ciclos: [...new Set(asignaciones.map(a => a.ciclo))],
+                profesores: [...new Set(asignaciones.map(a => a.profesor))]
+            });
+
+            alert("✅ Estudiante actualizado");
+
+        } else {
+
+            await docRef.set({
+                ...payload,
+                asignaciones: asignaturasSeleccionadas,
+                ciclos: [...new Set(asignaturasSeleccionadas.map(a => a.ciclo))],
+                profesores: [...new Set(asignaturasSeleccionadas.map(a => a.profesor))]
+            });
+
+            alert("✅ Estudiante registrado");
+        }
+
+        document.getElementById("formRegistro").reset();
+        asignaturasChecklistEl.innerHTML = '';
+        asigHintManualEl.style.display = 'none';
+        // ... (fin del cuerpo de la funcion submit)
+    });
+}
+
+// ************************************************************
+// 2. BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN
+// ************************************************************
+const auth = firebase.auth(); 
+    
+// ----------------------------------------------------
+// 🔑 BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN
+// ----------------------------------------------------
+auth.onAuthStateChanged(async (user) => {
+    
+    // 1. Si NO hay usuario logueado, redirigir al login
+    if (!user) {
+        window.location.href = "login.html"; 
+        return;
+    }
+
+    // 2. Usuario logueado: Verificar si su UID existe en la colección 'supervisores'
+    try {
+        const userUid = user.uid;
+        const supervisorDoc = await db.collection("supervisores").doc(userUid).get();
+
+        if (supervisorDoc.exists) {
+            // 🔑 ACCESO CONCEDIDO
+            document.body.style.display = 'block'; // 🟢 Mostrar la página
+            
+            // 📞 LLAMAR a la función que inicia toda la lógica de la página
+            inicializarGestion(); // LLAMADA AL WRAPPER
+            
+        } else {
+            // Acceso denegado: Logueado, pero no es supervisor
+            alert("Acceso denegado. No tienes permisos de supervisor.");
+            auth.signOut();
+            window.location.href = "login.html";
+        }
+
+    } catch (error) {
+        console.error("Error verificando supervisor:", error);
+        alert("Ocurrió un error en la verificación de seguridad.");
+        auth.signOut();
+        window.location.href = "login.html";
+    }
+});
+</script>
+</body>
+</html>

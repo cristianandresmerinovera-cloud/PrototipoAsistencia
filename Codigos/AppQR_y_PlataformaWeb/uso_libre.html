@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Uso Libre del Laboratorio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- XLSX y Firebase compat v9 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  
+  <style>
+    :root{
+      --pri:#0B7A5B;    /* verde institucional */
+      --pri-700:#095c45;
+      --sec:#1e3a8a;    /* azul apoyo */
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e5e7eb;
+      --chip:#eef2ff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:var(--bg); color:var(--text);
+      display: none;
+    }
+    .shell{max-width:1200px;margin:0 auto;padding:16px;}
+    header{
+      position:sticky; top:0; z-index:10; background:linear-gradient(180deg,#fff, #fff8);
+      backdrop-filter: blur(6px); border-bottom:1px solid var(--border);
+    }
+    .bar{display:flex; align-items:center; gap:14px; padding:10px 0;}
+    .logo{height:50px; width:auto; object-fit:contain}
+    .brand{flex:1}
+    .brand h1{font-size:18px; margin:0; color:var(--sec); font-weight:800; letter-spacing:.3px}
+    .brand p{margin:2px 0 0; color:var(--muted); font-size:13px}
+    .actions{display:flex; gap:8px; flex-wrap:wrap}
+    button, .btn{
+      border:1px solid var(--border); background:#fff; color:var(--sec);
+      padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600;
+      transition: .15s transform ease, .15s box-shadow ease, .15s background ease;
+    }
+    button:hover{transform: translateY(-1px); box-shadow:0 6px 18px #0001}
+    .btn-primary{background:var(--pri); color:#fff; border-color:transparent}
+    .btn-primary:hover{background:var(--pri-700)}
+    .chips{display:flex; gap:8px; flex-wrap:wrap}
+    .chip{background:var(--chip); color:#3730a3; padding:6px 10px; border-radius:999px; font-size:12px; border:1px dashed #c7d2fe}
+    .grid{
+      display:grid; gap:16px; grid-template-columns: repeat(12, 1fr);
+      margin-top:14px;
+    }
+    .card{
+      background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px;
+      box-shadow:0 10px 24px #00000008;
+    }
+    .col-3{grid-column: span 3}
+    .col-4{grid-column: span 4}
+    .col-6{grid-column: span 6}
+    .col-8{grid-column: span 8}
+    .col-12{grid-column: span 12}
+    @media (max-width: 1000px){
+      .col-3,.col-4,.col-6,.col-8{grid-column: span 12}
+    }
+    .kpi{display:flex; align-items:center; justify-content:space-between}
+    .kpi h3{margin:0; font-size:13px; color:var(--muted); font-weight:600}
+    .kpi .val{font-size:24px; font-weight:800; color:var(--pri)}
+    .filters{display:flex; gap:10px; flex-wrap:wrap}
+    .input, select {
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:#fff;
+  min-width:350px; /* antes era 200px */
+  outline:none;
+  color:#0b132a;
+}
+
+    table{border-collapse:collapse; width:100%}
+    thead th{
+      position:sticky; top:0; background:#fff; border-bottom:2px solid var(--border);
+      font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; padding:10px;
+    }
+    tbody td{border-bottom:1px solid var(--border); padding:10px; font-size:14px}
+    tbody tr:hover{background:#fafafa}
+    .fecha-head{
+      font-weight:800; color:var(--sec); margin:18px 0 8px; display:flex; align-items:center; gap:10px;
+    }
+    .fecha-head .dot{width:8px; height:8px; background:var(--pri); border-radius:999px}
+    .tabla-wrap{overflow:auto; border:1px solid var(--border); border-radius:14px; background:#fff}
+    .foot-actions{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap}
+    .muted{color:var(--muted)}
+    .badge{font-size:12px; border-radius:999px; padding:4px 8px; border:1px solid var(--border)}
+    .badge.ok{background:#ecfdf5; color:#047857; border-color:#a7f3d0}
+    .badge.reserva{background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe}
+  </style>
+</head>
+<body>
+  <header>
+    
+    
+    <div class="shell bar">
+      <img class="logo" src="logounl.png" alt="UNL" onerror="this.style.display='none'">
+      <div class="brand">
+        <h1>UNIVERSIDAD NACIONAL DE LOJA · LABORATORIO DE TELEMATICA</h1>
+        <p>Registro de uso de equipos y reservas </p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnExportGlobal">📥 Excel Global</button>
+        <a class="btn btn-primary" href="#" id="btnIrAsistencias">Ir a la página principal</a>
+      </div>
+      <button id="btnLogout" class="btn-mini warn" 
+    onclick="firebase.auth().signOut().then(() => { window.location.href = 'login.html'; })">
+    🚪 Cerrar Sesión
+</button>
+    </div>
+
+    
+
+
+
+    
+  </header>
+
+  <main class="shell">
+   
+
+    <!-- KPIs -->
+    <section class="grid">
+      <div class="card col-3">
+        <div class="kpi">
+          <div>
+            <h3>Registros (filtro)</h3>
+            <div class="val" id="kpiRegistros">0</div>
+          </div>
+          <span class="badge ok">Activo</span>
+        </div>
+      </div>
+      <div class="card col-3">
+        <div class="kpi">
+          <div>
+            <h3>Última fecha</h3>
+            <div class="val" id="kpiUltimaFecha">—</div>
+          </div>
+          <span class="badge">📅</span>
+        </div>
+      </div>
+      <div class="card col-3">
+        <div class="kpi">
+          <div>
+            <h3>Equipos distintos</h3>
+            <div class="val" id="kpiEquipos">0</div>
+          </div>
+          <span class="badge">🧰</span>
+        </div>
+      </div>
+      <div class="card col-3">
+        <div class="kpi">
+          <div>
+            <h3>Usuarios distintos</h3>
+            <div class="val" id="kpiUsuarios">0</div>
+          </div>
+          <span class="badge">👤</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filtros -->
+    <section class="card col-12" style="margin-top:14px">
+      <div class="filters">
+  <input id="q" class="input" placeholder="🔎 Buscar (nombre, cédula, equipo, código, modelo, marca)" />
+  <div style="display:flex; flex-direction:column">
+    <label for="f1" style="font-size:13px; color:#64748b; margin-bottom:4px;">Desde</label>
+    <input id="f1" type="date" class="input" />
+  </div>
+  <div style="display:flex; flex-direction:column">
+    <label for="f2" style="font-size:13px; color:#64748b; margin-bottom:4px;">Hasta</label>
+    <input id="f2" type="date" class="input" />
+  </div>
+  <button id="btnLimpiar" class="btn">Limpiar filtros</button>
+</div>
+
+    </section>
+<div class="tools" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+  <button id="btnModoEliminar" class="btn btn-danger">🗑 Eliminar</button>
+  <button id="btnModoAgregar" class="btn btn-primary">➕ Agregar registro</button>
+  <button id="btnSalirModo" class="btn" style="display:none">⛔ Salir del modo</button>
+</div>
+
+<!-- Modal agregar -->
+<div id="modalAgregarUso" class="modal" aria-hidden="true" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 style="margin:0;color:#0f172a">Agregar registro</h3>
+      <button class="btn-mini" onclick="cerrarModalAgregarUso()">Cerrar</button>
+    </div>
+
+    <!-- Buscar estudiante -->
+    <div style="margin-bottom:10px;">
+  <h4>Buscar estudiante</h4>
+  <input id="buscarEstInput" class="input" placeholder="Buscar por cédula, nombre o apellido...">
+  <ul id="listaBuscarEst" class="list" style="max-height:180px; overflow:auto;"></ul>
+
+  <!-- Contenedor selección interactiva -->
+  <div id="estSeleccionadoContainer" style="margin-top:6px;"></div>
+</div>
+
+
+
+    <!-- Agregar estudiante manual -->
+    <div style="padding:10px; border-top:1px solid #ddd; margin-bottom:10px;">
+      <h4>Agregar estudiante manual</h4>
+      <input id="apellidosInput" class="input" placeholder="Apellidos..." style="width:100%; margin-bottom:6px;">
+      <input id="nombresInput" class="input" placeholder="Nombres..." style="width:100%; margin-bottom:6px;">
+      <input id="cedulaInput" class="input" placeholder="Cédula (10 dígitos)" style="width:100%; margin-bottom:6px;">
+    </div>
+
+    <!-- Buscar equipo -->
+    <div style="margin-bottom:10px; border-top:1px solid #ddd; padding-top:10px;">
+  <h4>Buscar equipo</h4>
+  <input id="buscarEquipoInput" class="input" placeholder="Código, nombre, marca, modelo...">
+  <ul id="listaBuscarEquipo" class="list" style="max-height:180px; overflow:auto;"></ul>
+
+  <!-- Contenedor selección interactiva -->
+  <div id="equipoSeleccionadoContainer" style="margin-top:6px;"></div>
+</div>
+
+
+    <!-- Datos extra -->
+    <div style="border-top:1px solid #ddd; padding-top:10px; margin-bottom:10px;">
+      <h4>Datos de uso</h4>
+
+      <label>Hora inicio reserva (opcional):</label>
+      <input id="reservaInicioInput" type="time" class="input">
+
+      <label>Hora fin reserva (opcional):</label>
+      <input id="reservaFinInput" type="time" class="input">
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn-mini btn-primary" onclick="guardarRegistroUso()">Guardar registro</button>
+    </div>
+  </div>
+</div>
+
+
+    <!-- Contenido -->
+    <section id="contenedor" class="grid" style="margin-top:10px">
+      <!-- Se inyecta por JS -->
+    </section>
+  </main>
+
+  <script>
+    
+    // ======= Firebase =======
+    const firebaseConfig = {
+      apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+      authDomain: "escaner-qr-d7d65.firebaseapp.com",
+      projectId: "escaner-qr-d7d65",
+      storageBucket: "escaner-qr-d7d65.appspot.com",
+      messagingSenderId: "982923527298",
+      appId: "1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // ======= Estado =======
+    const $ = (s) => document.querySelector(s);
+    const contenedor = $("#contenedor");
+    const kpiReg = $("#kpiRegistros");
+    const kpiUlt = $("#kpiUltimaFecha");
+    const kpiEq  = $("#kpiEquipos");
+    const kpiUsr = $("#kpiUsuarios");
+
+    let DATA_RAW = [];   // todos los registros
+    let DATA_VIEW = [];  // registros filtrados
+
+
+
+
+function inicializarUsoLibre() {
+
+    // ======= Eventos UI (MOVIDO AQUÍ) =======
+    $("#q").addEventListener("input", aplicarFiltros);
+    $("#f1").addEventListener("change", aplicarFiltros);
+    $("#f2").addEventListener("change", aplicarFiltros);
+    $("#btnLimpiar").addEventListener("click", () => {
+      $("#q").value = ""; $("#f1").value=""; $("#f2").value="";
+      aplicarFiltros();
+    });
+    $("#btnExportGlobal").addEventListener("click", descargarExcelGlobal);
+    $("#btnIrAsistencias").addEventListener("click", (e) => {
+      e.preventDefault();
+  window.location.href = "https://escaner-qr-d7d65.web.app/portal.html";
+    });
+
+    // Start (MOVIDO AQUÍ)
+    cargar().catch(err => {
+      console.error(err);
+      contenedor.innerHTML = `<div class="card col-12" style="color:#b91c1c">Error cargando datos: ${err.message}</div>`;
+    });
+}
+
+    // ======= Utilitarios =======
+    function norm(v){ return (v ?? "").toString().trim(); }
+    function toDateFromStr(fechaStr){ // "2025-08-10" -> Date
+      if(!fechaStr) return null;
+      const parts = fechaStr.split("-");
+      if(parts.length===3){
+        return new Date(+parts[0], +parts[1]-1, +parts[2]);
+      }
+      // Fallback por si viene en otro formato
+      const d = new Date(fechaStr);
+      return isNaN(d) ? null : d;
+    }
+    function matchQuery(d, q){
+      if(!q) return true;
+      const hay = [
+        d.nombre, d.cedula, d.id,
+        d.equipo_nombre, d.equipo_codigo, d.equipo_modelo, d.equipo_marca,
+        d.tipo, d.fecha, d.hora
+      ].map(norm).join(" ").toLowerCase();
+      return hay.includes(q.toLowerCase());
+    }
+    function betweenDates(fechaStr, f1, f2){
+      if(!f1 && !f2) return true;
+      const d = toDateFromStr(fechaStr);
+      if(!d) return false;
+      if(f1 && d < f1) return false;
+      if(f2 && d > f2) return false;
+      return true;
+    }
+    function groupBy(arr, key){
+      return arr.reduce((acc, x) => {
+        const k = norm(x[key]);
+        acc[k] = acc[k] || [];
+        acc[k].push(x);
+        return acc;
+      }, {});
+    }
+    function safeTS(ts){
+      // Acepta Firestore Timestamp o string
+      if(ts && typeof ts.toDate === "function") return ts.toDate();
+      if(typeof ts === "string") {
+        const d = new Date(ts);
+        if(!isNaN(d)) return d;
+      }
+      return null;
+    }
+
+    // ======= Render =======
+    function render(){
+      contenedor.innerHTML = "";
+      if(!DATA_VIEW.length){
+        contenedor.innerHTML = `<div class="card col-12 muted">Sin resultados para los filtros seleccionados.</div>`;
+        kpiReg.textContent = "0";
+        kpiUlt.textContent = "—";
+        kpiEq.textContent  = "0";
+        kpiUsr.textContent = "0";
+        return;
+      }
+
+      // KPIs
+      kpiReg.textContent = DATA_VIEW.length.toString();
+      const maxFecha = DATA_VIEW
+        .map(r => r.fecha)
+        .filter(Boolean)
+        .sort()
+        .slice(-1)[0];
+      kpiUlt.textContent = maxFecha || "—";
+      const eqSet = new Set(DATA_VIEW.map(r => norm(r.equipo_codigo)).filter(Boolean));
+      const usSet = new Set(DATA_VIEW.map(r => norm(r.cedula)).filter(Boolean));
+      kpiEq.textContent  = eqSet.size.toString();
+      kpiUsr.textContent = usSet.size.toString();
+
+      // Agrupar por fecha
+      const porFecha = groupBy(DATA_VIEW, "fecha");
+const fechas = Object.keys(porFecha).sort().reverse();
+
+      fechas.forEach(fecha => {
+        const lista = porFecha[fecha];
+
+        // Encabezado por fecha
+        const head = document.createElement("div");
+        head.className = "col-12";
+        head.innerHTML = `
+          <div class="fecha-head">
+            <span class="dot"></span>
+            <div>
+              <div style="font-weight:800">${fecha}</div>
+              <div class="muted" style="font-size:12px">${lista.length} registro(s)</div>
+            </div>
+          </div>`;
+        contenedor.appendChild(head);
+
+        // Tabla
+        const wrap = document.createElement("div");
+        wrap.className = "tabla-wrap col-12";
+        const tbl = document.createElement("table");
+        tbl.innerHTML = `
+  <thead>
+    <tr>
+      <th>N°</th>
+      <th>Nombre</th>
+      <th>Cédula</th>
+      <th>Equipo</th>
+      <th>Código</th>
+      <th>Marca</th>
+      <th>Reserva Inicio</th>
+      <th>Reserva Fin</th>
+      <th>Hora de marcado</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+`;
+
+        const TB = tbl.querySelector("tbody");
+
+        lista
+          .slice()
+          .sort((a,b) => (norm(a.hora)).localeCompare(norm(b.hora)))
+          .forEach((d, i) => {
+            const tipoBadge = norm(d.tipo)==="uso_reserva"
+              ? `<span class="badge reserva">uso_reserva</span>`
+              : `<span class="badge">uso_libre</span>`;
+
+            const ts = safeTS(d.timestamp);
+            const tsStr = ts ? ts.toLocaleString() : (norm(d.timestamp) || "");
+
+            const tr = document.createElement("tr");
+const idCorrecto = armarId(d);
+tr.setAttribute("onclick", `clickRegistroUso('${idCorrecto}')`);
+
+tr.innerHTML = `
+  <td>${i+1}</td>
+  <td>${norm(d.nombre)}</td>
+  <td>${norm(d.cedula)}</td>
+  <td>${norm(d.equipo_nombre)}</td>
+  <td>${norm(d.equipo_codigo)}</td>
+  <td>${norm(d.equipo_marca)}</td>
+  <td>${norm(d.reserva_hora_inicio)}</td>
+  <td>${norm(d.reserva_hora_fin)}</td>
+  <td>${tsStr}</td>
+`;
+
+TB.appendChild(tr);
+
+
+            TB.appendChild(tr);
+          });
+
+        wrap.appendChild(tbl);
+        contenedor.appendChild(wrap);
+
+        // Acciones por fecha
+        const foot = document.createElement("div");
+foot.className = "foot-actions col-12";
+const link = document.createElement("a");
+link.className = "btn btn-primary";
+link.textContent = `📅 Ver registro para descargar — ${fecha}`;
+link.href = `https://escaner-qr-d7d65.web.app/asistencia_equipos.html?fecha=${fecha}`;
+ link.target = "_blank"; // abre en nueva pestaña
+ foot.appendChild(link);
+ contenedor.appendChild(foot);
+
+      });
+    }
+
+    function descargarExcel(datos, nombreBase){
+      const headers = [
+        "N°","Nombre","Cédula","Fecha","Hora",
+        "Equipo Nombre","Equipo Código","Marca","Modelo",
+        "Reserva Inicio","Reserva Fin","Tipo","Timestamp"
+      ];
+      const rows = [headers];
+      datos.forEach((d, i) => {
+        const ts = safeTS(d.timestamp);
+        const tsStr = ts ? ts.toLocaleString() : (norm(d.timestamp) || "");
+        rows.push([
+          i+1,
+          norm(d.nombre),
+          norm(d.cedula),
+          norm(d.fecha),
+          norm(d.hora),
+          norm(d.equipo_nombre),
+          norm(d.equipo_codigo),
+          norm(d.equipo_marca),
+          norm(d.equipo_modelo),
+          norm(d.reserva_hora_inicio),
+          norm(d.reserva_hora_fin),
+          norm(d.tipo),
+          tsStr
+        ]);
+      });
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, "Registros");
+      XLSX.writeFile(wb, `${nombreBase}.xlsx`);
+    }
+
+    function descargarExcelGlobal(){
+      if(!DATA_VIEW.length){
+        alert("No hay datos para exportar.");
+        return;
+      }
+      // Orden global por fecha + hora
+      const ordenados = DATA_VIEW.slice().sort((a,b) => {
+        const A = `${norm(a.fecha)} ${norm(a.hora)}`;
+        const B = `${norm(b.fecha)} ${norm(b.hora)}`;
+        return A.localeCompare(B);
+      });
+      descargarExcel(ordenados, "UsoLibre_Reservas_GLOBAL");
+    }
+function armarId(d) {
+  const ced = (d.cedula || "").trim();
+  const fecha = (d.fecha || "").trim(); // Debe estar en formato YYYY-MM-DD
+  const cod = (d.equipo_codigo || "").trim();
+
+  // Convertir timestamp a fecha real
+  let fechaTs = null;
+  try {
+    fechaTs = d.timestamp.toDate();
+  } catch (e) {
+    console.error("Timestamp inválido:", d);
+    return "";
+  }
+
+  const hh = String(fechaTs.getHours()).padStart(2, "0");
+  const mm = String(fechaTs.getMinutes()).padStart(2, "0");
+  const horaMarcado = `${hh}:${mm}`;
+
+  // Determinar tipo para el ID
+  const tipoId = d.reserva_hora_inicio ? "usoReserva" : "usoLibre";
+
+  return `${ced}_${fecha}_${horaMarcado}_${cod}_${tipoId}`;
+}
+
+    // ======= Filtros =======
+    function aplicarFiltros(){
+      const q = norm($("#q").value);
+const f1v = $("#f1").value ? new Date($("#f1").value+"T00:00:00") : null;
+const f2v = $("#f2").value ? new Date($("#f2").value+"T23:59:59") : null;
+
+DATA_VIEW = DATA_RAW.filter(d =>
+     matchQuery(d, q)
+  && betweenDates(d.fecha, f1v, f2v)
+);
+render();
+
+    }
+
+    // ======= Carga de datos =======
+    async function cargar(){
+      // const horarios = await db.collection("horario_laboratorio").get();
+
+      const snap = await db.collection("uso_libre").orderBy("timestamp", "asc").get();
+      DATA_RAW = snap.docs.map(x => {
+        const d = x.data() || {};
+        // Normalizamos nombres de campos esperados
+        return {
+          cedula: norm(d.cedula || d.id || ""),
+          id: norm(d.id || d.cedula || ""),
+          nombre: norm(d.nombre),
+          equipo_codigo: norm(d.equipo_codigo),
+          equipo_marca: norm(d.equipo_marca),
+          equipo_modelo: norm(d.equipo_modelo),
+          equipo_nombre: norm(d.equipo_nombre),
+          fecha: norm(d.fecha),
+          hora: norm(d.hora),
+          reserva_hora_inicio: norm(d.reserva_hora_inicio),
+          reserva_hora_fin: norm(d.reserva_hora_fin),
+          timestamp: d.timestamp ?? "",
+          tipo: norm(d.tipo || "uso_libre"),
+        };
+      });
+
+      DATA_VIEW = DATA_RAW.slice();
+      render();
+    }
+
+
+    let modoEliminar = false;
+let estudianteSeleccionado = null;
+let equipoSeleccionado = null;
+$("#btnModoEliminar").addEventListener("click", () => {
+  modoEliminar = true;
+  alert("Modo eliminar activado. Haz clic en un registro para borrarlo.");
+  $("#btnSalirModo").style.display = "inline-block";
+});
+
+$("#btnSalirModo").addEventListener("click", () => {
+  modoEliminar = false;
+  $("#btnSalirModo").style.display = "none";
+  alert("Has salido del modo eliminar.");
+});
+
+$("#btnModoAgregar").addEventListener("click", () => {
+  abrirModalAgregarUso();
+});
+
+
+// Funciones de eliminar, agg estudiante
+async function clickRegistroUso(idDoc) {
+  if (!modoEliminar) return;
+
+  const ok = confirm("¿Eliminar este registro?");
+  if (!ok) return;
+
+  await db.collection("uso_libre").doc(idDoc).delete();
+  alert("Eliminado.");
+  cargar();
+}
+
+function abrirModalAgregarUso() {
+  $("#modalAgregarUso").style.display = "flex";
+}
+
+function cerrarModalAgregarUso() {
+  $("#modalAgregarUso").style.display = "none";
+  estudianteSeleccionado = null;
+  equipoSeleccionado = null;
+}
+$("#buscarEstInput").addEventListener("input", async e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) return $("#listaBuscarEst").innerHTML = "";
+
+  const snap = await db.collection("estudiantes").get();
+  let html = "";
+
+  snap.forEach(doc => {
+    const d = doc.data();
+    const texto = d.nombre.toLowerCase(); // Aquí usamos el nombre completo
+    if (texto.includes(q)) {
+      html += `<li onclick="seleccionarEst('${doc.id}', '${d.nombre}', '${d.cedula}')">
+        ${d.nombre} — ${d.cedula}
+      </li>`;
+    }
+  });
+
+  $("#listaBuscarEst").innerHTML = html;
+});
+
+
+$("#buscarEquipoInput").addEventListener("input", async e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) return $("#listaBuscarEquipo").innerHTML = "";
+
+  const snap = await db.collection("equipos").get();
+  let html = "";
+
+  snap.forEach(doc => {
+    const d = doc.data();
+    const texto = (d.codigo + " " + d.nombre + " " + d.marca + " " + d.modelo).toLowerCase();
+    if (texto.includes(q)) {
+      html += `<li onclick="seleccionarEquipo('${doc.id}', '${d.codigo}', '${d.nombre}', '${d.marca}', '${d.modelo}')">
+  ${d.codigo} — ${d.nombre} (${d.marca} ${d.modelo})
+</li>`;
+
+    }
+  });
+
+  $("#listaBuscarEquipo").innerHTML = html;
+});
+
+function crearChip(texto, containerId, callbackEliminar) {
+  const div = document.createElement("div");
+  div.style.display = "inline-flex";
+  div.style.alignItems = "center";
+  div.style.background = "#3b82f6";
+  div.style.color = "#fff";
+  div.style.padding = "2px 6px";
+  div.style.borderRadius = "12px";
+  div.style.marginRight = "6px";
+  div.style.marginTop = "4px";
+  div.style.fontSize = "13px";
+
+  div.textContent = texto;
+
+  const btn = document.createElement("span");
+  btn.textContent = "✕";
+  btn.style.marginLeft = "6px";
+  btn.style.cursor = "pointer";
+  btn.onclick = () => {
+    div.remove();
+    callbackEliminar();
+  };
+
+  div.appendChild(btn);
+  document.getElementById(containerId).appendChild(div);
+}
+
+function seleccionarEst(id, nombreCompleto, ced) {
+  estudianteSeleccionado = {
+    nombre: nombreCompleto.toUpperCase(),
+    cedula: ced
+  };
+  // Limpiar contenedor y agregar chip
+  $("#estSeleccionadoContainer").innerHTML = "";
+  crearChip(`${nombreCompleto.toUpperCase()} — ${ced}`, "estSeleccionadoContainer", () => {
+    estudianteSeleccionado = null;
+  });
+}
+
+
+
+
+function seleccionarEquipo(id, codigo, nombre, marca, modelo) {
+  equipoSeleccionado = {
+    codigo,
+    nombre,
+    marca,
+    modelo
+  };
+  // Limpiar contenedor y agregar chip
+  $("#equipoSeleccionadoContainer").innerHTML = "";
+  crearChip(`${codigo} — ${nombre} (${marca})`, "equipoSeleccionadoContainer", () => {
+    equipoSeleccionado = null;
+  });
+}
+
+async function guardarRegistroUso() {
+
+  // ============================
+  // VALIDAR ESTUDIANTE
+  // ============================
+  let ced, nombreCompleto;
+
+  if (estudianteSeleccionado) {
+    ced = estudianteSeleccionado.cedula;
+    // Si viene de la búsqueda, usamos el nombre completo directamente
+    nombreCompleto = estudianteSeleccionado.nombre;
+
+  } else {
+    // Manual
+    const ape = $("#apellidosInput").value.trim().toUpperCase();
+    const nom = $("#nombresInput").value.trim().toUpperCase();
+    ced = $("#cedulaInput").value.trim();
+
+    if (!ape || !nom) return alert("Debes ingresar apellidos y nombres.");
+    if (!/^[0-9]{10}$/.test(ced)) return alert("Cédula inválida.");
+
+    nombreCompleto = `${ape} ${nom}`;
+  }
+
+  // ============================
+  // VALIDAR EQUIPO
+  // ============================
+  if (!equipoSeleccionado) {
+    return alert("Debes seleccionar un equipo.");
+  }
+
+  // ============================
+  // REGISTRAR
+  // ============================
+  const fecha = new Date();
+const fechaStr = `${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;  const hh = String(fecha.getHours()).padStart(2, "0");
+  const mm = String(fecha.getMinutes()).padStart(2, "0");
+  const horaStr = `${hh}:${mm}`;
+
+  const reservaInicio = $("#reservaInicioInput").value || "";
+  const reservaFin = $("#reservaFinInput").value || "";
+
+  const tipoFirestore = reservaInicio ? "uso_reserva" : "uso_libre";
+  const tipoID = reservaInicio ? "usoReserva" : "usoLibre";
+
+  const docID = `${ced}_${fechaStr}_${horaStr}_${equipoSeleccionado.codigo}_${tipoID}`;
+
+  await db.collection("uso_libre").doc(docID).set({
+    cedula: ced,
+    nombre: nombreCompleto,
+    fecha: fechaStr,
+    hora: horaStr,
+    equipo_codigo: equipoSeleccionado.codigo,
+    equipo_nombre: equipoSeleccionado.nombre,
+    equipo_marca: equipoSeleccionado.marca,
+    equipo_modelo: equipoSeleccionado.modelo,
+    reserva_hora_inicio: reservaInicio,
+    reserva_hora_fin: reservaFin,
+    tipo: tipoFirestore,
+    timestamp: firebase.firestore.Timestamp.now()
+  });
+
+  alert("Registro guardado.");
+  cerrarModalAgregarUso();
+  cargar();
+}
+
+// ... (Tu código termina aquí, después de la función guardarRegistroUso y antes del nuevo bloque)
+
+    // Es necesario inicializar Auth aquí
+    const auth = firebase.auth();
+    
+    // ----------------------------------------------------
+    // 🔑 BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN
+    // ----------------------------------------------------
+    auth.onAuthStateChanged(async (user) => {
+        
+        // 1. Si NO hay usuario logueado, redirigir al login
+        if (!user) {
+            window.location.href = "login.html"; // Asegúrate de que esta URL sea correcta
+            return;
+        }
+
+        // 2. Usuario logueado: Verificar si su UID existe en la colección 'supervisores'
+        try {
+            const userUid = user.uid;
+            
+            const supervisorDoc = await db.collection("supervisores").doc(userUid).get();
+
+            if (supervisorDoc.exists) {
+                // 🔑 ACCESO CONCEDIDO
+                document.body.style.display = 'block'; // 🟢 Mostrar la página
+                
+                // 📞 LLAMAR a la función que inicia toda la lógica de la página
+                inicializarUsoLibre(); 
+                
+            } else {
+                // Acceso denegado: Logueado, pero no es supervisor
+                alert("Acceso denegado. No tienes permisos de supervisor.");
+                auth.signOut(); 
+                window.location.href = "login.html";
+            }
+
+        } catch (error) {
+            console.error("Error verificando supervisor:", error);
+            alert("Ocurrió un error en la verificación de seguridad.");
+            auth.signOut();
+            window.location.href = "login.html";
+        }
+    });
+
+    
+  </script>
+  
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login | Laboratorio</title>
+  <link rel="icon" href="icono-app.png" type="image/png" />
+  <meta name="theme-color" content="#1d70b8" />
+
+  <!-- Firebase (compat v9) -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root{
+      --bg:#f3f6fb;
+      --panel:#ffffff;
+      --muted:#475569;
+      --text:#0f172a;
+      --primary:#1d70b8;
+      --primary-700:#155e96;
+      --stroke:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:
+        radial-gradient(1200px 800px at 10% -10%, #eef2ff 0%, transparent 55%),
+        radial-gradient(900px 500px at 90% 10%, #e2e8f0 0%, transparent 50%),
+        var(--bg);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
+      color:var(--text);
+    }
+
+    .card{
+      width:100%;
+      max-width:400px;
+      background:var(--panel);
+      border:1px solid var(--stroke);
+      border-radius:18px;
+      padding:24px;
+      box-shadow:0 12px 32px rgba(0,0,0,.12);
+    }
+    .card h1{
+      font-size:22px;
+      text-align:center;
+      margin:0 0 14px;
+      color:#1e3a8a;
+    }
+    .input{
+      width:100%;
+      padding:12px;
+      border-radius:12px;
+      border:1px solid #cbd5e1;
+      margin-bottom:12px;
+      font-size:14px;
+    }
+    .btn{
+      width:100%;
+      border:none;
+      padding:12px;
+      border-radius:12px;
+      background:linear-gradient(135deg,var(--primary),var(--primary-700));
+      color:#fff;
+      font-weight:600;
+      cursor:pointer;
+      transition:.2s;
+    }
+    .btn:hover{background:#134e75}
+    .note{
+      margin-top:10px;
+      font-size:12px;
+      color:var(--muted);
+      text-align:center;
+    }
+    .error{
+      color:#dc2626;
+      font-size:13px;
+      text-align:center;
+      margin-bottom:8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+  <h1>Iniciar sesión</h1>
+  <div id="errorBox" class="error"></div>
+  <form id="loginForm" autocomplete="on">
+    <input id="usuario" class="input" name="username" autocomplete="username" placeholder="Usuario o correo">
+    <input id="pass" class="input" type="password" name="password" autocomplete="current-password" placeholder="Contraseña">
+    <button type="submit" class="btn">Entrar</button>
+    <p class="note">
+  <a href="#" id="forgotLink" style="color:#1d70b8; text-decoration:none;">¿Olvidaste tu contraseña?</a>
+</p>
+
+  </form>
+  <p class="note">Debes estar registrado como <strong>supervisor activo</strong>.</p>
+</div>
+
+
+  <script>
+    // ========= Firebase =========
+    const firebaseConfig = {
+      apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+      authDomain: "escaner-qr-d7d65.firebaseapp.com",
+      projectId: "escaner-qr-d7d65",
+      storageBucket: "escaner-qr-d7d65.appspot.com",
+      messagingSenderId: "982923527298",
+      appId: "1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db   = firebase.firestore();
+
+    async function resolveEmail(identifier){
+      if(identifier.includes('@')) return identifier;
+      const q = await db.collection('supervisores')
+        .where('usernameLower','==',identifier.toLowerCase())
+        .where('activo','==',true)
+        .limit(1).get();
+      if(q.empty) throw new Error('Usuario no encontrado');
+      return q.docs[0].data().correo_personal;
+    }
+
+    async function verifySupervisor(user){
+      if(!user) return false;
+      const doc = await db.collection('supervisores').doc(user.uid).get();
+      return doc.exists && doc.data().activo && doc.data().role === 'supervisor';
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault(); // evita que se recargue la página al enviar el form
+
+  const userInput = document.getElementById('usuario').value.trim();
+  const pass = document.getElementById('pass').value.trim();
+  const errorBox = document.getElementById('errorBox');
+  errorBox.textContent = "";
+
+  if(!userInput || !pass){
+    errorBox.textContent = "Completa los campos";
+    return;
+  }
+
+  try{
+    const email = await resolveEmail(userInput);
+    const cred  = await auth.signInWithEmailAndPassword(email, pass);
+    const ok = await verifySupervisor(cred.user);
+    if(!ok){ await auth.signOut(); throw new Error("No autorizado"); }
+
+    // Guardar sesión local
+    localStorage.setItem("sesion","on");
+    localStorage.setItem("perfil", JSON.stringify({
+      uid: cred.user.uid,
+      email: cred.user.email
+    }));
+
+    window.location.href = "portal.html";
+  }catch(e){
+    errorBox.textContent = e.message;
+  }
+});
+
+
+    // Si ya está logeado y autorizado, ir directo al portal
+    auth.onAuthStateChanged(async user=>{
+      if(user){
+        const ok = await verifySupervisor(user);
+        if(ok) window.location.href = "portal.html";
+      }
+    });
+document.getElementById('forgotLink').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const userInput = document.getElementById('usuario').value.trim();
+  const errorBox = document.getElementById('errorBox');
+  errorBox.textContent = "";
+
+  if(!userInput){
+    errorBox.textContent = "Ingresa tu usuario o correo para recuperar la contraseña.";
+    return;
+  }
+
+  try{
+    const email = await resolveEmail(userInput);
+    await auth.sendPasswordResetEmail(email);
+    errorBox.style.color = "green";
+    errorBox.textContent = "Se ha enviado un correo para restablecer tu contraseña.";
+  }catch(e){
+    errorBox.style.color = "#dc2626";
+    errorBox.textContent = e.message || "Error al enviar el correo.";
+  }
+});
+
+  </script>
+</body>
+</html>

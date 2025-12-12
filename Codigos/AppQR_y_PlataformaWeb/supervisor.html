@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <!-- Ícono -->
+  <link rel="icon" href="icono-app.png" type="image/png" />
+
+  <!-- Manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Color de tema (naranja) -->
+  <meta name="theme-color" content="#f59e0b" />
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Escaneo de Asistencia · SUPERVISOR</title>
+
+  <!-- Librerías -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+
+  <style>
+    :root{
+      --brand: #9a3412;     /* naranja oscuro header */
+      --brand-2: #f59e0b;   /* borde header */
+      --accent: #f59e0b;    /* botones/acento */
+      --accent-2:#d97706;   /* hover */
+    }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f1f5f9;
+      text-align: center;
+    }
+    header {
+      background-color: var(--brand);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      border-bottom: 4px solid var(--brand-2);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    header img { height: 60px; flex-shrink: 0; }
+    header h2 { margin: 0; font-size: 20px; font-weight: 700; flex-grow: 1; text-align: center; min-width: 200px; letter-spacing:.3px }
+    .tag { font-size:12px; padding:4px 8px; background:#fff; color:#9a3412; border-radius:999px; font-weight:700; }
+    .userbar { display:flex; align-items:center; gap:8px; }
+    .userbar button { background:var(--accent); border:0; color:#fff; padding:6px 10px; border-radius:8px; cursor:pointer; font-size:14px; }
+    .userbar button:hover{ background:var(--accent-2); }
+    .userbar .danger { background:#ef4444; }
+    .userbar .danger:hover { background:#b91c1c; }
+
+    main { padding: 20px; max-width: 520px; margin: 0 auto; }
+    .titulo-centro { color: var(--brand); font-weight: 800; font-size: 22px; margin: 8px 0 20px; }
+
+    .botones-container { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-bottom: 22px; }
+    .boton-imagen { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.25s ease; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.08); width: 140px; user-select: none; border:1px solid #fde68a; }
+    .boton-imagen:hover { transform: scale(1.05); }
+    .boton-imagen img { width: 100px; height: 100px; object-fit: contain; margin-bottom: 10px; }
+    .boton-imagen span { font-weight: 700; color: var(--brand); text-wrap: balance; text-align:center; }
+
+    #practicasForm { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); max-width: 400px; margin: 0 auto 24px; display: none; text-align: left; border:1px solid #fde68a; }
+    #practicasForm label { display: block; margin-bottom: 8px; font-weight: 700; color: var(--brand); }
+    #practicasForm select, #practicasForm input { width: 100%; padding: 8px 10px; margin-bottom: 15px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 16px; }
+    #practicasForm button { background-color: var(--accent); border: none; color: white; padding: 10px 15px; margin-right: 10px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background-color 0.2s ease; }
+    #practicasForm button:hover { background-color: var(--accent-2); }
+
+    #seccion-escaner { max-width: 520px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: none; border:1px solid #fde68a; }
+    #seccion-escaner h3 { color: var(--brand); margin-bottom: 15px; }
+    #reader { margin: 0 auto; width: 100%; max-width: 320px; }
+    #seccion-escaner button { margin-top: 20px; background-color: var(--accent); border: none; color: white; padding: 10px 25px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background-color 0.2s ease; }
+    #seccion-escaner button:hover { background-color: var(--accent-2); }
+
+    #seccion-uso-libre { display:none; }
+    .grid { display:grid; grid-template-columns:1fr; gap:10px; }
+    .card-eq { background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.12); padding:12px; text-align:left; display:flex; justify-content:space-between; align-items:center; gap:8px; border:1px solid #fde68a; }
+    .eq-info { font-size:14px; color:#1f2937; }
+    .eq-info b { color:#111827; }
+    .pill { padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .pill.libre { background:#ecfdf5; color:#065f46; }
+    .pill.reservado { background:#fff7ed; color:#92400e; }
+    .pill.enuso { background:#fff7ed; color:#9a3412; }
+    .pill.mant { background:#fee2e2; color:#991b1b; }
+    .btn-sm { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:8px 10px; cursor:pointer; font-size:14px; }
+    .btn-sm:hover { background:var(--accent-2); }
+    .btn-sm[disabled]{ opacity:.5; cursor:not-allowed; }
+    .toolbar { display:flex; gap:8px; align-items:center; margin:10px 0 16px; }
+    .toolbar input[type="date"], .search { padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; }
+    .search { width:100%; }
+
+    #modal-scan { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:50; }
+    .box { background:#fff; border-radius:14px; max-width:540px; width:100%; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.2); border:1px solid #fde68a; }
+    .box h4 { margin:0 0 10px; color:var(--brand); }
+    .muted { color:#6b7280; font-size:14px; }
+    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+
+    /* Overlays */
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:60; }
+    .panel { background:#fff; border-radius:14px; max-width:540px; width:100%; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.2); border:1px solid #fde68a; }
+    .input { width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; }
+    .rowg { display:flex; gap:8px; align-items:center; }
+    .btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 14px; cursor:pointer; font-size:14px; }
+    .btn:hover{ background:var(--accent-2); }
+    .btn.secondary { background:#6b7280; }
+    .btn.secondary:hover { background:#4b5563; }
+    .list { text-align:left; font-size:14px; max-height:240px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; padding:8px; }
+
+    @media (max-width:520px){
+      .botones-container { gap:15px; }
+      .boton-imagen { width:46vw; padding:8px; }
+      .boton-imagen img { width:80px; height:80px; }
+      #seccion-escaner, #practicasForm { width:95vw; padding:15px; }
+      #reader { max-width:100%; width:100% !important; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="logounl.png" alt="Logo UNL" />
+  <h2>REGISTRO DE ASISTENCIA • <span class="tag">SUPERVISOR</span></h2>
+  <div class="userbar">
+    <span id="userLabel" style="font-size:12px;opacity:.95"></span>
+    <button id="btnLogin" onclick="abrirLogin()">Login</button>
+    <button id="btnPerfil" onclick="abrirPerfil()" style="display:none">Perfil</button>
+    <button id="btnLogout" class="danger" onclick="logout()" style="display:none">Salir</button>
+  </div>
+</header>
+
+<main>
+  <h3 class="titulo-centro">Panel de escaneo y control (Supervisor)</h3>
+
+  <!-- Menú -->
+  <div id="tipoAsistenciaContainer" class="botones-container">
+    <div class="boton-imagen" onclick="iniciarEscanerConTipo('clase')">
+      <img src="icono-clases.png" alt="Asistencia a Clases" />
+      <span>Escanear · Clases</span>
+    </div>
+    <div class="boton-imagen" onclick="iniciarUsoPorReserva()">
+      <img src="icono-laboratorio.png" alt="Uso Libre" />
+      <span>Uso Libre (Reservas)</span>
+    </div>
+    <div class="boton-imagen" onclick="mostrarFormularioPracticas()">
+      <img src="icono-practicas.png" alt="Prácticas" />
+      <span>Escanear · Prácticas</span>
+    </div>
+  </div>
+
+  <!-- Formulario prácticas -->
+  <div id="practicasForm">
+    <label for="preparatorio">¿Es preparatorio?</label>
+    <select id="preparatorio">
+      <option value="NO">N0</option>
+      <option value="SÍ">SÍ</option>
+    </select>
+
+    <label for="grupo">Grupo (opcional)</label>
+    <input type="text" id="grupo" placeholder="Ej: 1, 2, 3..." />
+
+    <div style="text-align: center;">
+      <button onclick="continuarConPractica()">Continuar</button>
+      <button class="btn secondary" onclick="cancelar()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Uso Libre -->
+  <div id="seccion-uso-libre">
+    <h3 style="color:var(--brand)">Uso Libre por reserva</h3>
+    <div class="toolbar">
+      <input id="fechaConsulta" type="date" />
+      <input id="buscaEquipo" class="search" type="text" placeholder="Buscar: código, nombre, marca o modelo…" />
+    </div>
+    <div id="gridEquipos" class="grid"></div>
+    <div style="margin-top:10px">
+      <button class="btn" onclick="volverMenu()">Volver</button>
+    </div>
+  </div>
+
+  <!-- Escáner -->
+  <div id="seccion-escaner">
+    <h3>Escanea el QR del estudiante</h3>
+    <div id="reader"></div>
+    <button onclick="cancelar()">Cancelar</button>
+  </div>
+
+  <!-- Modal Uso Libre -->
+  <div id="modal-scan">
+    <div class="box">
+      <h4 id="scanTitulo">Confirmar uso</h4>
+      <p class="muted" id="scanSub">Estudiante asignado: <b id="scanEst"></b>. Por favor, escanee su QR para iniciar el uso.</p>
+      <div id="readerModal"></div>
+      <div class="row" style="margin-top:10px">
+        <span class="muted" id="scanVentana"></span>
+        <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ====== Modal Login (username/contraseña) ====== -->
+<div id="loginOverlay" class="overlay">
+  <div class="panel">
+    <h3 style="margin:0 0 8px; color:var(--brand)">Login Supervisor</h3>
+    <p class="muted" style="margin:0 0 12px">Ingresa tu <b>usuario</b> y <b>contraseña</b>.</p>
+    <input id="loginUser" class="input" type="text" placeholder="usuario (username)" />
+    <input id="loginPass" class="input" type="password" placeholder="contraseña" style="margin-top:8px" />
+    <div class="rowg" style="margin-top:10px">
+      <button class="btn" onclick="doLoginSupervisor()">Entrar</button>
+      <button class="btn secondary" onclick="cerrarLogin()">Cerrar</button>
+      <button class="btn" onclick="recuperarContrasena()">¿Olvidaste tu contraseña?</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Modal Perfil (sin asistencias) ====== -->
+<div id="perfilOverlay" class="overlay">
+  <div class="panel" id="perfilPanel">
+    <h3 style="margin:0 0 8px; color:var(--brand)">Perfil Supervisor</h3>
+    <div id="perfilContent" style="text-align:left;font-size:14px"></div>
+    <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+      <label class="btn">
+        Cambiar foto
+        <input id="fotoInput" type="file" accept="image/*" style="display:none">
+      </label>
+      <!-- Utilidad: resetear deviceId de un alumno -->
+      <input id="resetCed" class="input" placeholder="Cédula alumno (reset deviceId)" style="flex:1">
+      <button class="btn" onclick="resetDeviceIdAlumno()">Reset dispositivo</button>
+      <button class="btn secondary" onclick="cerrarPerfil()" style="margin-left:auto">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  
+  /* ===================== Firebase ===================== */
+  const firebaseConfig = {
+    apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+    authDomain: "escaner-qr-d7d65.firebaseapp.com",
+    projectId: "escaner-qr-d7d65",
+    storageBucket: "escaner-qr-d7d65.appspot.com",
+    messagingSenderId: "982923527298",
+    appId: "1:982923527298:web:df13850f38d847cfdae09b"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const auth = firebase.auth();
+
+
+
+  /* ===================== Estado ===================== */
+  let tipoAsistenciaSeleccionado = null;
+  let datosPractica = { preparatorio: "", grupo: "" };
+  let scanner = null;
+  let scannerModal = null;
+let permisosVerificados = false; // 🔹 Nuevo: marca si ya se verificó supervisor y ubicación
+
+  // Uso libre
+  let equiposCache = [];
+  let reservasHoy = [];
+  let reservasConsulta = [];
+  let usosActivos = new Set();
+  let equipoClickActual = null;
+  let reservaParaEquipo = null;
+
+  let reservasHoyUnsub = null;
+  let reservasConsultaUnsub = null;
+
+  // Sesión
+  let soySupervisor = false;
+  const $ = s => document.querySelector(s);
+  const pad = n => String(n).padStart(2, "0");
+
+function hoyStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+  function norm(s){ return (s||"").toString().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,""); }
+
+  /* ===================== UI Sesión ===================== */
+  function setUserBar(user){
+    const lbl = $("#userLabel");
+    const bLogin = $("#btnLogin"), bPerfil = $("#btnPerfil"), bLogout = $("#btnLogout");
+    if (user) {
+      bLogin.style.display = "none";
+      bPerfil.style.display = "inline-block";
+      bLogout.style.display = "inline-block";
+      lbl.textContent = `Supervisor · ${user.email || ''}`;
+    } else {
+      bLogin.style.display = "inline-block";
+      bPerfil.style.display = "none";
+      bLogout.style.display = "none";
+      lbl.textContent = "";
+    }
+  }
+  function abrirLogin(){ $("#loginOverlay").style.display='flex'; }
+  function cerrarLogin(){ $("#loginOverlay").style.display='none'; }
+  function abrirPerfil(){ cargarPerfil(); $("#perfilOverlay").style.display='flex'; }
+  function cerrarPerfil(){ $("#perfilOverlay").style.display='none'; }
+
+  /* ===================== Auth (username + pass) ===================== */  async function doLoginSupervisor(){
+    const username = $("#loginUser").value.trim();
+    const password = $("#loginPass").value;
+    if (!username || !password){ alert("Completa usuario y contraseña"); return; }
+
+    try{
+      // buscar en estudiantes por username
+      const q = await db.collection("supervisores").where("username","==",username).limit(1).get();
+      if (q.empty) { alert("Usuario no encontrado"); return; }
+      const docSnap = q.docs[0]; const data = docSnap.data();
+      if (data.role !== "supervisor"){ alert("Este usuario no es supervisor"); return; }
+
+      // email interno según patrón que creaste en la página de creación
+    const loginEmail = (data.correo_personal || "").trim() || `${username}@supervisor.local`;
+      await auth.signInWithEmailAndPassword(internalEmail, password);
+
+      soySupervisor = true;
+      setUserBar(auth.currentUser);
+      cerrarLogin();
+      alert("✅ Sesión iniciada como supervisor");
+    }catch(e){ alert("❌ " + e.message); }
+  }
+  async function doLoginSupervisor(){
+  const username = $("#loginUser").value.trim();
+  const password = $("#loginPass").value;
+  if (!username || !password){ alert("Completa usuario y contraseña"); return; }
+
+  try{
+    const q = await db.collection("supervisores")
+                      .where("username","==",username)
+                      .where("activo","==",true)
+                      .limit(1).get();
+
+    if (q.empty) { alert("Usuario no encontrado o inactivo"); return; }
+    const data = q.docs[0].data();
+    if (data.role !== "supervisor"){ alert("Este usuario no es supervisor"); return; }
+
+    // Usa correo_personal si existe; si no, @supervisor.local
+    const loginEmail = (data.correo_personal || "").trim() || `${username}@supervisor.local`;
+
+    await auth.signInWithEmailAndPassword(loginEmail, password);
+
+    soySupervisor = true;
+    setUserBar(auth.currentUser);
+    cerrarLogin();
+    alert("✅ Sesión iniciada como supervisor");
+  } catch(e){
+    // Mensajes claros
+    if (e.code === "auth/invalid-credential" || e.code === "auth/invalid-login-credentials") {
+      alert("❌ Credenciales inválidas. Verifica el email/usuario y la contraseña.");
+    } else if (e.code === "auth/user-not-found") {
+      alert("❌ Usuario de autenticación no existe. Crea el usuario en Firebase Auth.");
+    } else if (e.code === "auth/wrong-password") {
+      alert("❌ Contraseña incorrecta.");
+    } else {
+      alert("❌ " + e.message);
+    }
+  }
+}
+
+  async function logout(){
+    await auth.signOut();
+    soySupervisor = false;
+    setUserBar(null);
+  }
+  auth.onAuthStateChanged((user)=> setUserBar(user));
+
+  /* ===================== Navegación ===================== */
+  function mostrarSeccion(seccion) {
+    $("#tipoAsistenciaContainer").style.display = "none";
+    $("#seccion-escaner").style.display = "none";
+    $("#practicasForm").style.display = "none";
+    $("#seccion-uso-libre").style.display = "none";
+    $("#modal-scan").style.display = "none";
+
+    if (seccion === "menu") $("#tipoAsistenciaContainer").style.display = "flex";
+    if (seccion === "escaner") { $("#seccion-escaner").style.display = "block"; try { iniciarEscaner(); } catch(e) {} }
+    if (seccion === "practica") $("#practicasForm").style.display = "block";
+    if (seccion === "uso") $("#seccion-uso-libre").style.display = "block";
+  }
+  function volverMenu(){
+    if (typeof reservasHoyUnsub === "function") reservasHoyUnsub();
+    if (typeof reservasConsultaUnsub === "function") reservasConsultaUnsub();
+    reservasHoyUnsub = null; reservasConsultaUnsub = null;
+    mostrarSeccion("menu");
+  }
+
+  /* ===================== Flujos ===================== */
+ function iniciarEscanerConTipo(tipo) {
+  if ((tipo === 'clase' || tipo === 'practica') && !soySupervisor) {
+    alert("🔐 Inicia sesión como supervisor.");
+    abrirLogin();
+    return;
+  }
+  
+  if (!permisosVerificados) {
+    alert("🚫 Ubicación no verificada todavía. Espera un momento.");
+    return;
+  }
+
+  tipoAsistenciaSeleccionado = tipo;
+  mostrarSeccion("escaner"); // 🔹 abre el escáner instantáneo
+}
+
+
+
+
+  
+  function mostrarFormularioPracticas() {
+    tipoAsistenciaSeleccionado = "practica";
+    mostrarSeccion("practica");
+  }
+ function continuarConPractica() {
+    datosPractica.preparatorio = document.getElementById("preparatorio").value;
+    datosPractica.grupo = document.getElementById("grupo").value;
+
+    // 🔹 Validar supervisor solo si no se ha hecho
+    if (!soySupervisor) { 
+        alert("🔐 Inicia sesión como supervisor."); 
+        abrirLogin(); 
+        return; 
+    }
+
+    // 🔹 Verificar ubicación solo si aún no se verificó
+    if (!permisosVerificados) { 
+        verificarUbicacionYRed("practica").then(() => {
+            iniciarEscanerConTipo("practica");
+        });
+    } else {
+        // 🔹 Ya verificado antes, solo abrir escáner
+        iniciarEscanerConTipo("practica");
+    }
+}
+
+  function cancelar() {
+    tipoAsistenciaSeleccionado = null;
+    datosPractica = { preparatorio: "", grupo: "" };
+    if (scanner) { scanner.clear().catch(()=>{}); scanner = null; }
+    if (scannerModal) { scannerModal.clear().catch(()=>{}); scannerModal = null; }
+    mostrarSeccion("menu");
+  }
+
+  /* ===================== Uso Libre (igual que tu flujo) ===================== */
+  function iniciarUsoPorReserva(){
+ if (!soySupervisor) {
+    alert("🔐 Debes iniciar sesión como supervisor para ver esta sección.");
+    return; // corta la función
+  }
+
+    tipoAsistenciaSeleccionado = "uso_reserva";
+    const f = document.getElementById("fechaConsulta");
+    f.value = hoyStr();
+    listenReservasHoy();
+    listenReservasConsulta(f.value);
+    mostrarSeccion("uso");
+    renderEquiposGrid();
+  }
+  db.collection("equipos").onSnapshot(snap=>{ equiposCache = snap.docs.map(d=>d.data()); renderEquiposGrid(); });
+  db.collection("usos").where("activo","==",true).onSnapshot(snap=>{ const set=new Set(); snap.forEach(d=>{ const u=d.data(); if (u.id_equipo) set.add(u.id_equipo); }); usosActivos=set; renderEquiposGrid(); });
+  function listenReservasHoy(){ if (typeof reservasHoyUnsub === "function") reservasHoyUnsub(); reservasHoyUnsub = db.collection("reservas").where("fecha","==", hoyStr()).onSnapshot(s=>{ reservasHoy = s.docs.map(d=>({id:d.id, ...d.data()})); renderEquiposGrid(); }); }
+  function listenReservasConsulta(fechaStr){ if (typeof reservasConsultaUnsub === "function") reservasConsultaUnsub(); reservasConsultaUnsub = db.collection("reservas").where("fecha","==", fechaStr).onSnapshot(s=>{ reservasConsulta = s.docs.map(d=>({id:d.id, ...d.data()})); renderEquiposGrid(); }); }
+  const grid = document.getElementById("gridEquipos");
+  const fechaConsulta = document.getElementById("fechaConsulta");
+  const buscaEquipo = document.getElementById("buscaEquipo");
+  fechaConsulta.addEventListener("change", ()=>{ listenReservasConsulta(fechaConsulta.value || hoyStr()); });
+  buscaEquipo.addEventListener("input", renderEquiposGrid);
+
+  function inRangeNowByDate(reserva) {
+    const [y,m,d] = reserva.fecha.split("-").map(Number);
+    const [sh, sm] = reserva.hora_inicio.split(":").map(Number);
+    const [eh, em] = reserva.hora_fin.split(":").map(Number);
+    const start = new Date(y, m-1, d, sh, sm || 0, 0, 0);
+    const end   = new Date(y, m-1, d, eh, em || 0, 0, 0);
+    const now   = new Date();
+    return (now.getTime() + 2*60*1000) >= start.getTime() && now < end;
+  }
+
+  function renderEquiposGrid(){
+    if (document.getElementById("seccion-uso-libre").style.display !== "block") return;
+    const fConsulta = fechaConsulta.value || hoyStr();
+    const q = (buscaEquipo.value||"").toLowerCase();
+    grid.innerHTML = "";
+    const equiposFiltrados = equiposCache.filter(e => !q || [e.codigo,e.nombre,e.marca,e.modelo].some(v => (v||"").toLowerCase().includes(q)));
+    if (!equiposFiltrados.length){ grid.innerHTML = `<div class="muted">No hay equipos que coincidan con la búsqueda.</div>`; return; }
+    equiposFiltrados.forEach(e=>{
+      const estadoBase = usosActivos.has(e.codigo) ? "en_uso" : (e.estado === "mantenimiento") ? "mantenimiento" : (e.estado === "reservado") ? "reservado" : "libre";
+      const reservasEquipoConsulta = reservasConsulta.filter(r => r.id_equipo === e.codigo);
+      const reservasEquipoHoy = reservasHoy.filter(r => r.id_equipo === e.codigo);
+      const activaHoy = reservasEquipoHoy.find(inRangeNowByDate);
+      const pillCls = estadoBase==="en_uso" ? "enuso" : estadoBase==="mantenimiento" ? "mant" : estadoBase==="reservado" ? "reservado" : "libre";
+      const pillText = estadoBase.replace("_"," ");
+      const card = document.createElement("div"); card.className = "card-eq";
+      const left = document.createElement("div"); left.className = "eq-info";
+      left.innerHTML = `
+        <div><b>${e.codigo}</b> — ${e.nombre} ${e.marca} ${e.modelo}</div>
+        <div style="font-size:13px;color:#475569">Serie: ${e.serie || "-"}</div>
+        ${ reservasEquipoConsulta.length
+            ? `<div class="muted" style="font-size:12px;margin-top:4px">
+                 ${fConsulta === hoyStr() ? "Reservas de hoy:" : `Reservas del ${fConsulta}:`}
+                 ${reservasEquipoConsulta.map(rr => `${rr.hora_inicio}-${rr.hora_fin} (${rr.nombre_estudiante})`).join(" • ")}
+               </div>`
+            : `<div class="muted" style="font-size:12px;margin-top:4px">Sin reservas para ${fConsulta}.</div>`
+        }`;
+      const right = document.createElement("div"); right.style.display="flex"; right.style.flexDirection="column"; right.style.gap="6px";
+      const pill = document.createElement("span"); pill.className = "pill " + pillCls; pill.textContent = pillText;
+      const btn = document.createElement("button"); btn.className = "btn-sm";
+      if (activaHoy && estadoBase !== "en_uso" && estadoBase !== "mantenimiento"){
+        btn.disabled = false; btn.textContent = `Reservado ahora: ${activaHoy.nombre_estudiante} (Iniciar)`; btn.onclick = ()=> abrirModalScan(e, activaHoy);
+      } else { btn.disabled = true; btn.textContent = estadoBase==="en_uso"?"En uso":(estadoBase==="mantenimiento"?"Mantenimiento":"Fuera de horario (no iniciable)"); }
+      right.appendChild(pill); right.appendChild(btn);
+      card.appendChild(left); card.appendChild(right); grid.appendChild(card);
+    });
+  }
+
+  function abrirModalScan(equipo, reservaHoyActiva){
+    equipoClickActual = equipo; reservaParaEquipo = reservaHoyActiva;
+    document.getElementById("scanTitulo").textContent = `Iniciar uso: ${equipo.codigo} — ${equipo.nombre} ${equipo.marca} ${equipo.modelo}`;
+    document.getElementById("scanEst").textContent = `${reservaHoyActiva.nombre_estudiante} (${reservaHoyActiva.cedula_estudiante})`;
+    document.getElementById("scanVentana").textContent = `Ventana: ${reservaHoyActiva.hora_inicio}–${reservaHoyActiva.hora_fin} (HOY)`;
+    document.getElementById("modal-scan").style.display = "flex";
+    iniciarEscanerModal();
+  }
+  function cerrarModal(){
+    if (scannerModal){ scannerModal.clear().catch(()=>{}); scannerModal=null; }
+    document.getElementById("modal-scan").style.display = "none";
+    equipoClickActual = null; reservaParaEquipo = null;
+  }
+  function iniciarEscanerModal(){
+    if (scannerModal){ scannerModal.clear().catch(()=>{}); scannerModal = null; }
+    scannerModal = new Html5QrcodeScanner("readerModal", { fps: 10, qrbox: 250 });
+    scannerModal.render(handleQRReserva);
+  }
+  async function handleQRReserva(decodedText){
+    if (scannerModal){ await scannerModal.clear().catch(()=>{}); scannerModal=null; }
+    const cedula = extraerCedulaDesdeQR(decodedText);
+    if (!cedula){ alert("⚠️ QR inválido"); cerrarModal(); return; }
+    const eq = equipoClickActual, r = reservaParaEquipo;
+    if (!eq || !r){ alert("⚠️ No se pudo determinar equipo/reserva."); cerrarModal(); return; }
+    if (!inRangeNowByDate(r)) { alert("❌ La reserva no está activa en este momento."); cerrarModal(); return; }
+    if (cedula !== r.cedula_estudiante) { alert("❌ QR distinto al estudiante asignado."); cerrarModal(); return; }
+
+    try{
+      await db.runTransaction(async (tx)=>{
+        const eqRef = db.collection("equipos").doc(eq.codigo);
+        const eqSnap = await tx.get(eqRef);
+        if (!eqSnap.exists) throw new Error("Equipo no encontrado.");
+        const usoActivoSnap = await db.collection("usos").where("id_equipo","==", eq.codigo).where("activo","==", true).get();
+        if (!usoActivoSnap.empty) throw new Error("El equipo ya está en uso.");
+
+        const finDate = new Date();
+        const [Hf,Mf] = r.hora_fin.split(":").map(Number);
+        finDate.setHours(Hf, Mf||0, 0, 0);
+
+        const usoRef = db.collection("usos").doc();
+        tx.set(usoRef, {
+          id_equipo: eq.codigo,
+          nombre_equipo: `${eq.nombre} ${eq.marca} ${eq.modelo}`,
+          cedula_estudiante: r.cedula_estudiante,
+          nombre_estudiante: r.nombre_estudiante,
+          id_reserva: r.id,
+          inicio: firebase.firestore.Timestamp.fromDate(new Date()),
+          fin: firebase.firestore.Timestamp.fromDate(finDate),
+          activo: true
+        });
+        tx.update(eqRef, { estado: "en_uso" });
+
+        const ahora = new Date();
+        const docIdUsoLibre = `${r.cedula_estudiante}_${hoyStr()}_${pad(ahora.getHours())}:${pad(ahora.getMinutes())}_${eq.codigo}_usoReserva`;
+        tx.set(db.collection("uso_libre").doc(docIdUsoLibre), {
+          id: r.cedula_estudiante,
+          nombre: r.nombre_estudiante,
+          cedula: r.cedula_estudiante,
+          equipo_codigo: eq.codigo,
+          equipo_nombre: eq.nombre,
+          equipo_marca: eq.marca,
+          equipo_modelo: eq.modelo,
+          fecha: hoyStr(),
+          hora: `${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`,
+          tipo: "uso_reserva",
+          reserva_hora_inicio: r.hora_inicio,
+          reserva_hora_fin: r.hora_fin,
+          timestamp: firebase.firestore.Timestamp.fromDate(ahora)
+        }, { merge: true });
+        tx.delete(db.collection("reservas").doc(r.id));
+      });
+      alert("✅ Uso iniciado correctamente.");
+    } catch(e){ console.error(e); alert("❌ No se pudo iniciar el uso: " + e.message); }
+    finally { cerrarModal(); }
+  }
+
+  /* ===================== Escáner Clases/Prácticas (sin restricciones de alumno) ===================== */
+  function iniciarEscaner() {
+    if (scanner) { scanner.clear().catch(()=>{}); scanner = null; }
+    scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+    scanner.render(async (decodedText) => {
+      scanner.clear();
+      const cedula = extraerCedulaDesdeQR(decodedText);
+      if (!cedula) { alert("⚠️ QR inválido"); mostrarSeccion("menu"); return; }
+
+      // En esta app, si es clase/práctica debe estar logueado como supervisor
+      if ((tipoAsistenciaSeleccionado === "clase" || tipoAsistenciaSeleccionado === "practica") && !soySupervisor) {
+        alert("🔐 Inicia sesión como supervisor.");
+        mostrarSeccion("menu"); return;
+      }
+
+      const ahora = new Date();
+      try {
+        const estDoc = await db.collection("estudiantes").doc(cedula).get();
+        if (!estDoc.exists) { alert("❌ Estudiante no encontrado"); mostrarSeccion("menu"); return; }
+        const datos = estDoc.data();
+
+        const fechaMostrar = `${ahora.getDate()}/${ahora.getMonth() + 1}/${ahora.getFullYear()}`;
+        const fechaID = `${ahora.getFullYear()}-${(ahora.getMonth() + 1).toString().padStart(2, "0")}-${ahora.getDate().toString().padStart(2, "0")}`;
+        const hora = `${ahora.getHours().toString().padStart(2, "0")}:00`;
+        const dia = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"][ahora.getDay()];
+        const timestamp = firebase.firestore.Timestamp.fromDate(ahora);
+
+        // Ruta antigua de uso libre (por compatibilidad)
+        if (tipoAsistenciaSeleccionado === "libre") {
+          const docId = `${cedula}_${fechaID}_${hora}_usoLibre`;
+          const docRef = db.collection("asistencias").doc(docId);
+          if ((await docRef.get()).exists) { alert("⚠️ Ya registraste uso libre recientemente"); mostrarSeccion("menu"); return; }
+          await docRef.set({
+            id: cedula, nombre: datos.nombre, cedula: datos.cedula, celular: datos.celular,
+            fecha: fechaMostrar, hora, tipo: "uso libre", timestamp
+          });
+          alert(`✅ Uso libre registrado para ${datos.nombre}`);
+          mostrarSeccion("menu"); return;
+        }
+
+        // === CLASES / PRÁCTICAS (supervisor puede todo) ===
+        const horariosSnap = await db.collection("horario_laboratorio").where("dia", "==", dia).get();
+        let clase = null;
+        for (const doc of horariosSnap.docs) {
+          const data = doc.data();
+          const horaInicio = parseInt(data.hora.split(":")[0]);
+          const horaFin = parseInt(data.hora_fin.split(":")[0]);
+          const horaActual = ahora.getHours();
+          if (horaInicio <= horaActual && horaActual < horaFin) { clase = data; break; }
+        }
+        if (!clase) { alert("❌ No hay clase programada en este horario"); mostrarSeccion("menu"); return; }
+
+        const asignaturaID = clase.asignatura.replace(/\s/g, "_");
+        const docId = `${cedula}_${fechaID}_${clase.hora}_${asignaturaID}`;
+        const docRef = db.collection("asistencias").doc(docId);
+        if ((await docRef.get()).exists) { alert("⚠️ Ya está registrada la asistencia de este estudiante para esta clase"); mostrarSeccion("menu"); return; }
+
+        const asistenciaData = {
+          id: cedula, nombre: datos.nombre, cedula: datos.cedula, celular: datos.celular,
+          fecha: fechaMostrar, hora: clase.hora, asignatura: clase.asignatura, profesor: clase.profesor,
+          ciclo: clase.ciclo || "", tipo: tipoAsistenciaSeleccionado, timestamp
+        };
+        if (tipoAsistenciaSeleccionado === "practica") {
+          asistenciaData.grupo = datosPractica.grupo;
+          asistenciaData.preparatorio = datosPractica.preparatorio;
+        }
+        await docRef.set(asistenciaData);
+        alert(`✅ Asistencia registrada en ${clase.asignatura} para ${datos.nombre}`);
+        mostrarSeccion("menu");
+      } catch (e) { console.error(e); alert("❌ Error al registrar asistencia"); mostrarSeccion("menu"); }
+    });
+  }
+
+  function extraerCedulaDesdeQR(qrTexto) {
+    try { const url = new URL(qrTexto); const base64 = url.searchParams.get("q"); if (!base64) return null; return atob(base64); }
+    catch { return null; }
+  }
+
+  /* ===================== Perfil (sin lista de asistencias) + utilidades supervisor ===================== */
+  async function cargarPerfil(){
+    const user = auth.currentUser;
+    if (!user){ abrirLogin(); return; }
+
+    // leer doc por username:
+    const username = (user.email || "").split("@")[0]; // por el patrón usuario@supervisor.local
+    const q = await db.collection("estudiantes").where("username","==",username).limit(1).get();
+    let d = {};
+    if (!q.empty) d = q.docs[0].data();
+
+    const cont = $("#perfilContent");
+    cont.innerHTML = `
+      <div class="rowg" style="align-items:flex-start">
+        <img id="fotoPerfil" src="${ d.fotoBase64 ? d.fotoBase64 : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0nMTAwJyBoZWlnaHQ9JzEwMCcgeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJz48Y2lyY2xlIGN4PSc1MCcgY3k9JzM2JyByPScyNCcgc3R5bGU9ImZpbGw6I2RlZGVlZSIvPjxyZWN0IHg9JzIwJyB5PSc2NCcgd2lkdGg9JzYwJyBoZWlnaHQ9JzI0JyBzdHlsZT0iZmlsbDojZGVkZWVlIi8+PC9zdmc+' }" style="width:72px;height:72px;border-radius:999px;object-fit:cover;border:1px solid #e5e7eb" />
+        <div>
+          <div><b>Usuario:</b> ${d.username || username}</div>
+          <div><b>Nombre:</b> ${d.nombre || '-'}</div>
+          <div><b>Correo:</b> ${d.correo_personal || '-'}</div>
+          <div class="muted">Este perfil no muestra asistencias.</div>
+        </div>
+      </div>
+    `;
+
+    // handler foto
+    $("#fotoInput").onchange = async (ev)=>{
+      const file = ev.target.files[0]; if (!file) return;
+      resizeAndCompressImage(file, 300, 300, 0.7, async (base64)=>{
+        try{
+          // actualizar el doc del supervisor (por username)
+          if (!q.empty) await q.docs[0].ref.update({ fotoBase64: base64 });
+          $("#fotoPerfil").src = base64; alert("✅ Foto actualizada");
+        }catch(e){ alert("❌ " + e.message); }
+      });
+    };
+  }
+
+  async function resetDeviceIdAlumno(){
+    const ced = $("#resetCed").value.trim();
+    if (!ced){ alert("Ingresa la cédula"); return; }
+    try{
+      await db.collection("estudiantes").doc(ced).update({ deviceId: firebase.firestore.FieldValue.delete() });
+      alert("✅ deviceId reseteado para " + ced);
+    }catch(e){ alert("❌ " + e.message); }
+  }
+
+  function resizeAndCompressImage(file, maxWidth, maxHeight, quality, cb) {
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const img = new Image();
+      img.onload = function() {
+        let width = img.width, height = img.height;
+        if (width > height && width > maxWidth) { height = Math.round(height * (maxWidth/width)); width = maxWidth; }
+        else if (height > maxHeight) { width = Math.round(width * (maxHeight/height)); height = maxHeight; }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const base64 = canvas.toDataURL("image/jpeg", quality);
+        cb(base64);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /* ===================== Limpieza de usos vencidos (igual que tu flujo) ===================== */
+  async function cleanupUsosVencidos(){
+    const ahoraTS = firebase.firestore.Timestamp.fromDate(new Date());
+    try{
+      const qFin = await db.collection("usos").where("fin","<=",ahoraTS).get();
+      if (!qFin.empty){ const batch1 = db.batch(); qFin.forEach(d => batch1.delete(d.ref)); await batch1.commit(); }
+      const qInact = await db.collection("usos").where("activo","==",false).get();
+      if (!qInact.empty){ const batch2 = db.batch(); qInact.forEach(d => batch2.delete(d.ref)); await batch2.commit(); }
+    }catch(e){ console.warn('cleanupUsosVencidos:', e.message); }
+  }
+
+  /* ===================== Arranque ===================== */
+  mostrarSeccion("menu");
+  setInterval(cleanupUsosVencidos, 60*1000);
+
+ function validarRedYUbicacionAntesDeEscanear(tipo) {
+  fetch("https://ipinfo.io/json")
+    .then(res => res.json())
+    .then(() => {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        const LAT_PERMITIDA = -4.0300005, LNG_PERMITIDA = -79.1994490, RADIO_METROS = 20;
+        const distancia = calcularDistanciaMetros(lat, lng, LAT_PERMITIDA, LNG_PERMITIDA);
+        if (distancia > RADIO_METROS) { alert("🚫 Fuera de la ubicación permitida."); return; }
+        permisosVerificados = true; // 🔹 Marca que ya se verificó
+      }, () => { alert("❌ No se pudo obtener tu ubicación"); });
+    })
+    .catch(() => {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        const LAT_PERMITIDA = -4.0300005, LNG_PERMITIDA = -79.1994490, RADIO_METROS = 20;
+        const distancia = calcularDistanciaMetros(lat, lng, LAT_PERMITIDA, LNG_PERMITIDA);
+        if (distancia > RADIO_METROS) { alert("🚫 Fuera de la ubicación permitida."); return; }
+        permisosVerificados = true; // 🔹 Marca que ya se verificó
+      }, () => { alert("❌ No se pudo obtener tu ubicación"); });
+    });
+}
+
+
+  function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180, Δλ = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * R / R; // simplificado
+  }
+  function recuperarContrasena() {
+  const email = prompt("Ingresa tu correo para restablecer la contraseña:");
+  if (!email) return;
+  auth.sendPasswordResetEmail(email)
+    .then(() => alert("📧 Se ha enviado un enlace para restablecer tu contraseña al correo ingresado."))
+    .catch(e => alert("❌ Error: " + e.message));
+}
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    console.log("Sesión restaurada:", user.email);
+
+    // Recuperar rol del usuario en Firestore
+    const doc = await db.collection("supervisores").doc(user.uid).get();
+
+    if (doc.exists) {
+      soySupervisor = true;
+
+      // 🔹 Solo iniciar la verificación si no se ha hecho
+      // y usar la selección actual: clase o práctica
+      if (!permisosVerificados && tipoAsistenciaSeleccionado) {
+        validarRedYUbicacionAntesDeEscanear(tipoAsistenciaSeleccionado);
+      }
+
+      setUserBar(user);   // Actualiza botones
+      console.log("Supervisor autenticado (restaurado).");
+    } else {
+      // No es supervisor → cerrar sesión
+      soySupervisor = false;
+      auth.signOut();
+      setUserBar(null);
+      console.log("No es supervisor, cerrando sesión.");
+    }
+
+  } else {
+    console.log("No hay sesión activa");
+    soySupervisor = false;
+    setUserBar(null);
+  }
+});
+
+  window.addEventListener("load", () => {
+    validarRedYUbicacionAntesDeEscanear("inicio");
+  });
+
+
+</script>
+
+</body>
+</html>

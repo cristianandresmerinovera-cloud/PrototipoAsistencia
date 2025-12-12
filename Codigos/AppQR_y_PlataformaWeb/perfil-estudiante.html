@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ficha del Estudiante · UNL</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- XLSX y Firebase compat v9 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* ====== Móvil (<= 640px) ====== */
+@media (max-width: 640px){
+  .shell{ padding:12px; }
+  .bar{ gap:8px; padding:8px 0; }
+  .logo{ height:40px; }
+  .brand h1{ font-size:14px; line-height:1.2; }
+  .brand p{ font-size:12px; }
+  .pill{ font-size:11px; padding:4px 8px; }
+
+  /* Perfil: apilar foto sobre datos */
+  .perfil{ grid-template-columns: 1fr; }
+  .avatar-wrap{ order: -1; }
+  .avatar{ width:120px; height:120px; }
+
+  /* Filas de datos más compactas y con wrap */
+  .row{ flex-wrap: wrap; gap:6px; }
+  .label{ min-width:120px; font-size:12px; }
+  .val{ font-size:14px; }
+
+  /* Tabs a 2 columnas (tipo “cards”) */
+  .tabs{ gap:6px; }
+  .tab{ flex: 1 1 calc(50% - 6px); text-align:center; padding:10px; }
+
+  /* Filtros a ancho completo */
+  .filters{ gap:8px; }
+  .input, select{ min-width: unset; width:100%; }
+
+  /* Tablas más compactas */
+  thead th, tbody td{ padding:8px; font-size:12px; }
+  .kpi .val{ font-size:20px; }
+
+  /* Ocultar columnas menos críticas en móvil:
+     Asistencias: # y Ciclo */
+  #tablaAsist table thead th:nth-child(1),
+  #tablaAsist table tbody td:nth-child(1),
+  #tablaAsist table thead th:nth-child(7),
+  #tablaAsist table tbody td:nth-child(7){
+    display:none;
+  }
+
+  /* Uso de equipos: #, Marca, Modelo, Reserva fin */
+  #tablaUso table thead th:nth-child(1),
+  #tablaUso table tbody td:nth-child(1),
+  #tablaUso table thead th:nth-child(6),
+  #tablaUso table tbody td:nth-child(6),
+  #tablaUso table thead th:nth-child(7),
+  #tablaUso table tbody td:nth-child(7),
+  #tablaUso table thead th:nth-child(9),
+  #tablaUso table tbody td:nth-child(9){
+    display:none;
+  }
+}
+
+/* ====== Muy pequeño (<= 380px): tabs 1 por línea y avatar más chico ====== */
+@media (max-width: 380px){
+  .tab{ flex: 1 1 100%; }
+  .logo{ height:36px; }
+  .avatar{ width:100px; height:100px; }
+}
+
+    :root{
+      --bg:#f6f7fb; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e5e7eb;
+      --azul:#1d4ed8; --celeste:#3b82f6;           /* asistencias */
+      --verde:#0B7A5B; --verde-700:#095c45;         /* uso libre   */
+      --accent:#111827;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text)}
+    .shell{max-width:1200px;margin:0 auto;padding:16px;}
+    header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,#fff,#fff8);backdrop-filter:blur(6px);border-bottom:1px solid var(--border)}
+    .bar{display:flex;align-items:center;gap:14px;padding:10px 0}
+    .logo{height:50px}
+    .brand{flex:1}
+    .brand h1{margin:0;font-size:18px;letter-spacing:.2px;color:var(--accent)}
+    .brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+    .pill{padding:6px 10px;border-radius:999px;border:1px dashed #cbd5e1;background:#f8fafc;font-size:12px;color:#334155}
+    .grid{display:grid;gap:16px;grid-template-columns:repeat(12,1fr)}
+    .col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-8{grid-column:span 8}.col-12{grid-column:span 12}
+    @media (max-width: 1000px){.col-3,.col-4,.col-6,.col-8{grid-column:span 12}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:0 10px 24px #0001}
+    /* === Perfil con foto a la izquierda === */
+    .perfil{display:grid;gap:16px;grid-template-columns:180px 1fr}
+    .avatar-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+    .avatar{width:160px;height:160px;border-radius:999px;object-fit:cover;border:2px solid var(--border);background:#f1f5f9}
+    .row{display:flex;gap:12px;align-items:center}
+    .label{min-width:170px;color:var(--muted);font-size:13px}
+    .val{font-weight:700}
+    .chip{font-size:12px;border-radius:999px;padding:4px 8px;border:1px solid var(--border);background:#f8fafc}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .tab{border:1px solid var(--border);background:#fff;color:#0b132a;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:700}
+    .tab.active{box-shadow:0 6px 18px #0001}
+    .tab.blue{color:#fff;background:linear-gradient(180deg,var(--celeste),var(--azul))}
+    .tab.green{color:#fff;background:linear-gradient(180deg,var(--verde),var(--verde-700))}
+    .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .input, select{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;min-width:200px;outline:none}
+    .btn{border:1px solid var(--border);background:#fff;color:#0b132a;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px #0001}
+    .btn-blue{background:var(--celeste);border-color:transparent;color:#fff}
+    .btn-green{background:var(--verde);border-color:transparent;color:#fff}
+    .kpi{display:flex;align-items:center;justify-content:space-between}
+    .kpi .val{font-size:24px;font-weight:800}
+    .tabla-wrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:#fff}
+    table{border-collapse:collapse;width:100%}
+    thead th{position:sticky;top:0;background:#fff;border-bottom:2px solid var(--border);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding:10px}
+    tbody td{border-bottom:1px solid var(--border);padding:10px;font-size:14px}
+    tbody tr:hover{background:#fafafa}
+    .muted{color:var(--muted)}
+    .empty{padding:20px;border:1px dashed var(--border);border-radius:12px;text-align:center}
+    .alert{color:#b91c1c}
+    .badge{font-size:12px;border-radius:999px;padding:4px 8px;border:1px solid var(--border)}
+    .badge.info{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+    /* ==== Arreglo móvil de la ficha ==== */
+
+/* Hasta 820px: apilar foto/datos y filas verticales */
+@media (max-width: 820px){
+  .perfil{
+    grid-template-columns: 1fr;   /* foto arriba, datos abajo */
+  }
+  .avatar{ width:120px; height:120px; }
+
+  /* Cada fila: label arriba, valor abajo */
+  .row{
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 4px;
+  }
+
+  .label{
+    min-width: 0;           /* quita ancho mínimo que empuja */
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .val{
+    font-size: 15px;
+    font-weight: 700;
+    /* Romper textos largos (emails, ubicaciones, cédula) */
+    word-break: break-word;      /* rompe palabras largas */
+    overflow-wrap: anywhere;     /* permite romper en cualquier punto */
+    line-height: 1.25;
+  }
+
+  /* Ajustes generales */
+  .shell{ padding: 12px; }
+  thead th, tbody td{ padding: 8px; font-size: 12px; }
+  .brand h1{ font-size: 14px; line-height: 1.2; }
+  .brand p{ font-size: 12px; }
+}
+
+/* Muy pequeño: afina avatar */
+@media (max-width: 380px){
+  .avatar{ width:100px; height:100px; }
+}
+
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell bar">
+      <img class="logo" src="logounl.png" alt="UNL" onerror="this.style.display='none'">
+      <div class="brand">
+        <h1>UNIVERSIDAD NACIONAL DE LOJA · LABORATORIO DE TELEMATICA</h1>
+        <p>Ficha del estudiante · Perfil, asistencias y uso de equipos</p>
+      </div>
+      <span class="pill" id="badgeCedula">Cédula: —</span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <!-- Perfil -->
+    <section class="card col-12">
+      <h2 style="margin:4px 0 10px">Perfil del estudiante</h2>
+      <div id="perfilEstado" class="muted">Cargando…</div>
+      <div id="perfil" class="perfil" style="display:none">
+        <!-- Foto -->
+        <div class="avatar-wrap">
+          <img id="p_foto" class="avatar" alt="Foto de perfil" />
+          <div class="muted" style="font-size:12px">Foto institucional</div>
+        </div>
+  
+        
+        <!-- Datos -->
+        <div>
+          <div class="row"><div class="label">Nombre</div><div class="val" id="p_nombre">—</div></div>
+          <div class="row"><div class="label">Cédula</div><div class="val" id="p_cedula">—</div></div>
+          <div class="row"><div class="label">Ciclo</div><div class="val" id="p_ciclo">—</div></div>
+          <div class="row"><div class="label">Género</div><div class="val" id="p_genero">—</div></div>
+          <div class="row"><div class="label">Correo institucional</div><div class="val" id="p_ci">—</div></div>
+          <div class="row"><div class="label">Correo personal</div><div class="val" id="p_cp">—</div></div>
+          <div class="row"><div class="label">Celular</div><div class="val" id="p_cel">—</div></div>
+          <div class="row"><div class="label">Provincia/Cantón/Parroquia</div><div class="val" id="p_loc">—</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab blue active" data-tab="asist">Asistencias</button>
+      <button class="tab green" data-tab="uso">Uso de equipos</button>
+    </div>
+
+    <!-- KPIs -->
+    <section class="grid" style="margin-top:10px">
+      <div class="card col-3">
+        <div class="kpi">
+          <div>
+            <div class="muted" style="font-weight:600">Registros (vista)</div>
+            <div class="val" id="kpiTotal">0</div>
+          </div>
+          <span class="badge">Activo</span>
+        </div>
+      </div>
+      <div class="card col-3">
+        <div class="kpi">
+          <div>
+            <div class="muted" style="font-weight:600">Primera fecha</div>
+            <div class="val" id="kpiPrimera">—</div>
+          </div>
+          <span class="badge">📅</span>
+        </div>
+      </div>
+      <div class="card col-3">
+        <div class="kpi">
+          <div>
+            <div class="muted" style="font-weight:600">Última fecha</div>
+            <div class="val" id="kpiUltima">—</div>
+          </div>
+          <span class="badge">📅</span>
+        </div>
+      </div>
+      <div class="card col-3" id="kpiExtraWrap" style="display:none">
+        <div class="kpi">
+          <div>
+            <div class="muted" style="font-weight:600">Equipos distintos</div>
+            <div class="val" id="kpiEquipos">0</div>
+          </div>
+          <span class="badge">🧰</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filtros -->
+    <section class="card col-12" style="margin-top:14px">
+      <!-- Asistencias: solo clase/practica -->
+      <div id="filtrosAsist" class="filters">
+        <input id="qAsist" class="input" placeholder="🔎 Buscar (asignatura, profesor…)" />
+        <input id="aF1" type="date" class="input" />
+        <input id="aF2" type="date" class="input" />
+        <select id="aTipo" class="input">
+          <option value="">Todos</option>
+          <option value="clase">clase</option>
+          <option value="practica">practica</option>
+        </select>
+        <button id="btnClearAsist" class="btn">Limpiar</button>
+<!-- <button id="btnExcelAsist" class="btn btn-blue">📥 Excel</button> -->
+        
+      </div>
+
+      <!-- Uso: sin tipo -->
+      <div id="filtrosUso" class="filters" style="display:none">
+        <input id="qUso" class="input" placeholder="🔎 Buscar (equipo, código, modelo, marca…)" />
+        <input id="uF1" type="date" class="input" />
+        <input id="uF2" type="date" class="input" />
+        <button id="btnClearUso" class="btn">Limpiar</button>
+<!-- <button id="btnExcelUso" class="btn btn-green">📥 Excel</button> -->
+      </div>
+    </section>
+
+    <!-- Tablas -->
+    <section class="card col-12" id="wrapAsist">
+      <div id="estadoAsist" class="muted">Cargando asistencias…</div>
+      <div id="tablaAsist" class="tabla-wrap" style="display:none">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Asignatura</th>
+              <th>Profesor</th>
+              <th>Tipo</th>
+              <th>Ciclo</th>
+            </tr>
+          </thead>
+          <tbody id="tbAsist"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card col-12" id="wrapUso" style="display:none">
+      <div id="estadoUso" class="muted">Cargando uso de equipos…</div>
+      <div id="tablaUso" class="tabla-wrap" style="display:none">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Equipo</th>
+              <th>Código</th>
+              <th>Marca</th>
+              <th>Modelo</th>
+              <th>Reserva inicio</th>
+              <th>Reserva fin</th>
+            </tr>
+          </thead>
+          <tbody id="tbUso"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ================= Firebase =================
+    const firebaseConfig = {
+      apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+      authDomain: "escaner-qr-d7d65.firebaseapp.com",
+      projectId: "escaner-qr-d7d65",
+      storageBucket: "escaner-qr-d7d65.appspot.com",
+      messagingSenderId: "982923527298",
+      appId: "1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // ================= Utilitarios =================
+   // Avatar por defecto (silueta). Colores: fondo #e5e7eb, trazo #9ca3af
+const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">\
+<rect width="160" height="160" rx="80" fill="%23e5e7eb"/>\
+<g fill="none" stroke="%239ca3af" stroke-width="6" stroke-linecap="round">\
+<circle cx="80" cy="60" r="26"/>\
+<path d="M30 132c10-26 34-36 50-36s40 10 50 36"/>\
+</g></svg>';
+
+    const $ = s => document.querySelector(s);
+    function norm(v){ return (v ?? "").toString().trim(); }
+    function safeTS(ts){
+      if(ts && typeof ts.toDate === "function") return ts.toDate();
+      const d = new Date(ts);
+      return isNaN(d) ? null : d;
+    }
+    function strDate(d){
+      if(!d) return "";
+      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), da = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${da}`;
+    }
+    function parseFechaStr(s){
+      s = norm(s);
+      if(!s) return null;
+      if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+        const [y,m,d]=s.split("-").map(Number);
+        return new Date(y,m-1,d);
+      }
+      const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if(m){ return new Date(+m[3], +m[2]-1, +m[1]); }
+      const d = new Date(s);
+      return isNaN(d)?null:d;
+    }
+    function getCedulaFromURL(){
+      const url = new URL(window.location.href);
+      const byQuery = url.searchParams.get('cedula') || url.searchParams.get('id');
+      if(byQuery) return byQuery.trim();
+      const parts = url.pathname.split('/').filter(Boolean);
+      const last = parts[parts.length-1];
+      if(last && /^\d{8,13}$/.test(last)) return last;
+      return "";
+    }
+    function fotoToDataURL(fotoBase64){
+      const s = norm(fotoBase64);
+      if(!s) return "";
+      if(s.startsWith("data:image/")) return s; // ya viene con prefijo
+      return "data:image/jpeg;base64," + s;     // por defecto jpeg
+    }
+    function minCiclo(d){
+      // Soporta 'ciclos' (array) y 'ciclo' (número)
+      if(Array.isArray(d.ciclos) && d.ciclos.length){
+        const nums = d.ciclos.map(x => Number(x)).filter(x => !Number.isNaN(x));
+        if(nums.length) return Math.min(...nums);
+      }
+      if(typeof d.ciclo !== "undefined" && d.ciclo !== null){
+        const n = Number(d.ciclo);
+        if(!Number.isNaN(n)) return n;
+      }
+      return "—";
+    }
+
+    // ================= Estado =================
+    const badgeCedula = $("#badgeCedula");
+    const perfilBox = $("#perfil");
+    const perfilEstado = $("#perfilEstado");
+    const P = {
+      foto: $("#p_foto"),
+      nombre: $("#p_nombre"),
+      cedula: $("#p_cedula"),
+      ciclo: $("#p_ciclo"),
+      genero: $("#p_genero"),
+      ci: $("#p_ci"),
+      cp: $("#p_cp"),
+      cel: $("#p_cel"),
+      loc: $("#p_loc"),
+    };
+
+    // Asistencias
+    const estadoAsist = $("#estadoAsist");
+    const tablaAsist = $("#tablaAsist");
+    const tbAsist = $("#tbAsist");
+    let ASIS_RAW = [];
+    let ASIS_VIEW = [];
+
+    // Uso
+    const estadoUso = $("#estadoUso");
+    const tablaUso = $("#tablaUso");
+    const tbUso = $("#tbUso");
+    let USO_RAW = [];
+    let USO_VIEW = [];
+
+    // KPIs
+    const kpiTotal = $("#kpiTotal");
+    const kpiPrimera = $("#kpiPrimera");
+    const kpiUltima = $("#kpiUltima");
+    const kpiEquipos = $("#kpiEquipos");
+    const kpiExtraWrap = $("#kpiExtraWrap");
+
+    // ================= Render Perfil =================
+    function renderPerfil(d){
+      perfilEstado.style.display = "none";
+      perfilBox.style.display = "grid";
+      P.nombre.textContent  = norm(d.nombre) || "—";
+      P.cedula.textContent  = norm(d.cedula) || "—";
+      P.ciclo.textContent   = minCiclo(d);
+      P.genero.textContent  = norm(d.genero) || "—";
+      P.ci.textContent      = norm(d.correo_institucional) || "—";
+      P.cp.textContent      = norm(d.correo_personal) || "—";
+      P.cel.textContent     = norm(d.celular) || "—";
+      const loc = [d.provincia_actual, d.canton_actual, d.parroquia_actual].map(norm).filter(Boolean).join(" / ");
+      P.loc.textContent     = loc || "—";
+      const foto = fotoToDataURL(d.fotoBase64);
+if (foto) {
+  P.foto.src = foto;
+  P.foto.alt = `Foto de ${P.nombre.textContent}`;
+} else {
+  P.foto.src = DEFAULT_AVATAR;         // ← silueta por defecto
+  P.foto.alt = "Avatar por defecto";
+  P.foto.style.background = "transparent";
+}
+
+    }
+
+    // ================= Render Tablas & KPIs =================
+    function renderKPIs(arr, isUso=false){
+      kpiTotal.textContent = arr.length.toString();
+      if(arr.length===0){ kpiPrimera.textContent="—"; kpiUltima.textContent="—"; }
+      else{
+        const fechas = arr.map(x => parseFechaStr(x.fecha)).filter(Boolean).sort((a,b)=>a-b);
+        kpiPrimera.textContent = fechas[0] ? strDate(fechas[0]) : "—";
+        kpiUltima.textContent  = fechas[fechas.length-1] ? strDate(fechas[fechas.length-1]) : "—";
+      }
+      if(isUso){
+        const setEq = new Set(arr.map(x => norm(x.equipo_codigo)).filter(Boolean));
+        kpiEquipos.textContent = String(setEq.size);
+        kpiExtraWrap.style.display = "";
+      }else{
+        kpiExtraWrap.style.display = "none";
+      }
+    }
+
+    function renderAsist(){
+      if(!ASIS_VIEW.length){
+        estadoAsist.innerHTML = '<div class="empty">Sin asistencias para los filtros seleccionados.</div>';
+        estadoAsist.style.display = "";
+        tablaAsist.style.display = "none";
+        renderKPIs([], false);
+        return;
+      }
+      estadoAsist.style.display = "none";
+      tablaAsist.style.display = "";
+      tbAsist.innerHTML = "";
+      ASIS_VIEW
+        .slice()
+        .sort((a,b) => (`${norm(a.fecha)} ${norm(a.hora)}`).localeCompare(`${norm(b.fecha)} ${norm(b.hora)}`))
+        .forEach((d,i)=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${i+1}</td>
+            <td>${norm(d.fecha)}</td>
+            <td>${norm(d.hora)}</td>
+            <td>${norm(d.asignatura)}</td>
+            <td>${norm(d.profesor)}</td>
+            <td><span class="badge info">${norm(d.tipo)}</span></td>
+            <td>${norm(d.ciclo) || "—"}</td>
+          `;
+          tbAsist.appendChild(tr);
+        });
+      renderKPIs(ASIS_VIEW,false);
+    }
+
+    function renderUso(){
+      if(!USO_VIEW.length){
+        estadoUso.innerHTML = '<div class="empty">Sin registros de uso para los filtros seleccionados.</div>';
+        estadoUso.style.display = "";
+        tablaUso.style.display = "none";
+        renderKPIs([], true);
+        return;
+      }
+      estadoUso.style.display = "none";
+      tablaUso.style.display = "";
+      tbUso.innerHTML = "";
+      USO_VIEW
+        .slice()
+        .sort((a,b) => (`${norm(a.fecha)} ${norm(a.hora)}`).localeCompare(`${norm(b.fecha)} ${norm(b.hora)}`))
+        .forEach((d,i)=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${i+1}</td>
+            <td>${norm(d.fecha)}</td>
+            <td>${norm(d.hora)}</td>
+            <td>${norm(d.equipo_nombre)}</td>
+            <td>${norm(d.equipo_codigo)}</td>
+            <td>${norm(d.equipo_marca)}</td>
+            <td>${norm(d.equipo_modelo)}</td>
+            <td>${norm(d.reserva_hora_inicio)}</td>
+            <td>${norm(d.reserva_hora_fin)}</td>
+          `;
+          tbUso.appendChild(tr);
+        });
+      renderKPIs(USO_VIEW,true);
+    }
+
+    // ================= Filtros =================
+    function matchQuery(haystack, q){ return haystack.toLowerCase().includes(q.toLowerCase()); }
+    function betweenDates(fechaStr, f1, f2){
+      if(!f1 && !f2) return true;
+      const d = parseFechaStr(fechaStr);
+      if(!d) return false;
+      if(f1 && d < f1) return false;
+      if(f2 && d > f2) return false;
+      return true;
+    }
+
+    function applyAsist(){
+      const q = norm($("#qAsist").value);
+      const f1 = $("#aF1").value ? new Date($("#aF1").value+"T00:00:00") : null;
+      const f2 = $("#aF2").value ? new Date($("#aF2").value+"T23:59:59") : null;
+      const tipo = norm($("#aTipo").value);
+      ASIS_VIEW = ASIS_RAW.filter(d=>{
+        const hay = [d.asignatura, d.profesor, d.tipo, d.ciclo, d.fecha, d.hora].map(x=>norm(x)).join(" ");
+        return (!q || matchQuery(hay,q))
+          && (!tipo || norm(d.tipo)===tipo)
+          && betweenDates(d.fecha, f1, f2);
+      });
+      renderAsist();
+    }
+
+    function applyUso(){
+      const q = norm($("#qUso").value);
+      const f1 = $("#uF1").value ? new Date($("#uF1").value+"T00:00:00") : null;
+      const f2 = $("#uF2").value ? new Date($("#uF2").value+"T23:59:59") : null;
+      USO_VIEW = USO_RAW.filter(d=>{
+        const hay = [d.equipo_nombre, d.equipo_codigo, d.equipo_modelo, d.equipo_marca, d.fecha, d.hora].map(x=>norm(x)).join(" ");
+        return (!q || matchQuery(hay,q)) && betweenDates(d.fecha, f1, f2);
+      });
+      renderUso();
+    }
+
+    // ================= Exportar =================
+  //   function exportExcel(rows, nombreBase){
+  //     const wb = XLSX.utils.book_new();
+   //    const ws = XLSX.utils.aoa_to_sheet(rows);
+   //    XLSX.utils.book_append_sheet(wb, ws, "Registros");
+  //     XLSX.writeFile(wb, `${nombreBase}.xlsx`);
+// }
+   //  function exportAsist(){
+   //    if(!ASIS_VIEW.length) return alert("No hay asistencias para exportar.");
+// const headers = ["#","Fecha","Hora","Asignatura","Profesor","Tipo","Ciclo"];
+    //   const rows = [headers];
+   //    ASIS_VIEW.slice().sort((a,b)=>(`${a.fecha} ${a.hora}`).localeCompare(`${b.fecha} ${b.hora}`))
+   //      .forEach((d,i)=>rows.push([i+1,norm(d.fecha),norm(d.hora),norm(d.asignatura),norm(d.profesor),norm(d.tipo),norm(d.ciclo)]));
+   //    exportExcel(rows, `Asistencias_${badgeCedula.textContent.replace('Cédula: ','')}`);
+//     }
+   //  function exportUso(){
+// if(!USO_VIEW.length) return alert("No hay registros de uso para exportar.");
+   //    const headers = ["#","Fecha","Hora","Equipo","Código","Marca","Modelo","Reserva inicio","Reserva fin"];
+      // const rows = [headers];
+      // USO_VIEW.slice().sort((a,b)=>(`${a.fecha} ${a.hora}`).localeCompare(`${b.fecha} ${b.hora}`))
+       //  .forEach((d,i)=>rows.push([i+1,norm(d.fecha),norm(d.hora),norm(d.equipo_nombre),norm(d.equipo_codigo),norm(d.equipo_marca),norm(d.equipo_modelo),norm(d.reserva_hora_inicio),norm(d.reserva_hora_fin)]));
+    //   exportExcel(rows, `UsoEquipos_${badgeCedula.textContent.replace('Cédula: ','')}`);
+ //    }
+
+    // ================= Tabs =================
+    function setTab(tabId){
+      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+      document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+      if(tabId==='asist'){
+        $("#wrapAsist").style.display = "";
+        $("#wrapUso").style.display = "none";
+        $("#filtrosAsist").style.display = "";
+        $("#filtrosUso").style.display = "none";
+        renderKPIs(ASIS_VIEW,false);
+      }else{
+        $("#wrapAsist").style.display = "none";
+        $("#wrapUso").style.display = "";
+        $("#filtrosAsist").style.display = "none";
+        $("#filtrosUso").style.display = "";
+        renderKPIs(USO_VIEW,true);
+      }
+    }
+    document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>setTab(b.getAttribute('data-tab'))));
+
+    // ================= Carga =================
+    async function loadPerfil(cedula){
+      try{
+        const doc = await db.collection("estudiantes").doc(cedula).get();
+        if(!doc.exists){
+          perfilEstado.innerHTML = `<span class="alert">No se encontró el perfil para esta cédula.</span>`;
+          return;
+        }
+        const data = {cedula, ...doc.data()};
+        renderPerfil(data);
+      }catch(err){
+        perfilEstado.innerHTML = `<span class="alert">Error cargando perfil: ${err.message}</span>`;
+      }
+    }
+
+    async function loadAsistencias(cedula){
+      try{
+        const snap = await db.collection("asistencias").where("cedula","==",cedula).get();
+        ASIS_RAW = snap.docs.map(x=>{
+          const d = x.data()||{};
+          // Normalizar tipo SOLO a "clase" o "practica"
+          let t = norm(d.tipo).toLowerCase();
+          if(t.includes("prac")) t = "practica"; else t = "clase";
+          return {
+            fecha: norm(d.fecha),
+            hora: norm(d.hora),
+            asignatura: norm(d.asignatura),
+            profesor: norm(d.profesor),
+            tipo: t,
+            ciclo: norm(d.ciclo),
+            timestamp: d.timestamp ?? ""
+          };
+        });
+        ASIS_VIEW = ASIS_RAW.slice();
+        renderAsist();
+      }catch(err){
+        estadoAsist.innerHTML = `<span class="alert">Error cargando asistencias: ${err.message}</span>`;
+      }
+    }
+
+    async function loadUso(cedula){
+      try{
+        const snap = await db.collection("uso_libre").where("cedula","==",cedula).get();
+        USO_RAW = snap.docs.map(x=>{
+          const d = x.data()||{};
+          return {
+            fecha: norm(d.fecha), hora: norm(d.hora),
+            equipo_nombre: norm(d.equipo_nombre),
+            equipo_codigo: norm(d.equipo_codigo),
+            equipo_marca: norm(d.equipo_marca),
+            equipo_modelo: norm(d.equipo_modelo),
+            reserva_hora_inicio: norm(d.reserva_hora_inicio),
+            reserva_hora_fin: norm(d.reserva_hora_fin),
+            timestamp: d.timestamp ?? ""
+          };
+        });
+        USO_VIEW = USO_RAW.slice();
+        renderUso();
+      }catch(err){
+        estadoUso.innerHTML = `<span class="alert">Error cargando uso de equipos: ${err.message}</span>`;
+      }
+    }
+
+    // ================= Eventos =================
+    // Filtros asist
+    $("#qAsist").addEventListener("input", applyAsist);
+    $("#aF1").addEventListener("change", applyAsist);
+    $("#aF2").addEventListener("change", applyAsist);
+    $("#aTipo").addEventListener("change", applyAsist);
+    $("#btnClearAsist").addEventListener("click", ()=>{ $("#qAsist").value=""; $("#aF1").value=""; $("#aF2").value=""; $("#aTipo").value=""; applyAsist(); });
+   // $("#btnExcelAsist").addEventListener("click", exportAsist);
+
+    // Filtros uso (sin tipo)
+    $("#qUso").addEventListener("input", applyUso);
+    $("#uF1").addEventListener("change", applyUso);
+    $("#uF2").addEventListener("change", applyUso);
+    $("#btnClearUso").addEventListener("click", ()=>{ $("#qUso").value=""; $("#uF1").value=""; $("#uF2").value=""; applyUso(); });
+   // $("#btnExcelUso").addEventListener("click", exportUso);
+
+    // ================= Init =================
+    (async function(){
+      const cedula = getCedulaFromURL();
+      if(!cedula){
+        badgeCedula.textContent = "Cédula: —";
+        perfilEstado.innerHTML = `<span class="alert">No se detectó la cédula en la URL. Usa <code>?cedula=XXXXXXXXXX</code> o <code>/estudiante/XXXXXXXXXX</code>.</span>`;
+        return;
+      }
+      badgeCedula.textContent = "Cédula: " + cedula;
+      await Promise.all([loadPerfil(cedula), loadAsistencias(cedula), loadUso(cedula)]);
+      setTab('asist');
+    })();
+  </script>
+</body>
+</html>

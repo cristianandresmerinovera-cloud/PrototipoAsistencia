@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Horario del Laboratorio - UNL</title>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background-color: #f7f9fc; color: #222; }
+    .encabezado { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 2px solid #ccc; margin-bottom: 20px; }
+    .encabezado img { height: 60px; }
+    .texto-centro { text-align: center; flex: 1; padding: 0 10px; font-size: 14px; line-height: 1.4; }
+    .texto-centro strong { display: block; font-size: 16px; }
+    .horario-titulo { font-weight: bold; margin-top: 5px; color: #004a99; }
+
+    table { border-collapse: collapse; width: 100%; background: white; border: 1px solid #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.1); table-layout: fixed; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; min-width: 100px; white-space: pre-line; font-size: 13px; }
+    th { background-color: #004a99; color: white; }
+    td.boton { background-color: #cce5ff; cursor: pointer; }
+    td:hover { background-color: #e6f0ff; }
+
+    .controls { margin: 10px 0 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .controls label { font-weight: bold; }
+
+    .acciones { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+    .btn-mini { display: inline-flex; align-items: center; gap: 6px; background:#1976D2; color:#fff; border:none; padding:8px 12px; font-size:14px; border-radius:6px; cursor:pointer; }
+    .btn-mini.secondary { background:#43A047; }
+    .btn-mini.warn { background:#f39c12; }
+    .btn-mini.neutral { background:#64748b; } /* NUEVO */
+    .btn-mini:hover { filter: brightness(1.05); }
+
+    #bannerEdicion { display:none; background:#fff3cd; color:#664d03; border:1px solid #ffecb5; padding:10px 12px; border-radius:6px; font-size:14px; }
+    #bannerEdicion strong { margin-right: 10px; }
+
+    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color: rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000; }
+    .modal-content { background:white; padding:20px; border-radius:8px; width:420px; max-width:92vw; box-shadow:0 2px 10px rgba(0,0,0,0.3); }
+    .modal-content h3 { margin:0 0 8px 0; }
+    .field { margin-top:10px; }
+    .field label { display:block; font-size:13px; font-weight:600; margin-bottom:4px; }
+    input, select { width:100%; padding:8px; font-size:1em; box-sizing:border-box; }
+    .modal-buttons { display:flex; gap:10px; justify-content:space-between; margin-top:15px; }
+    .subtle { font-size:12px; color:#666; }
+
+    /* NUEVO: estilos para la tabla del administrador de clases */
+    .modal-wide .modal-content { width: 760px; }                   /* modal más ancho */
+    .toolbar { display:flex; gap:8px; align-items:center; margin:8px 0 12px; }
+    .toolbar input { max-width:240px; }
+    .table-wrap { max-height: 52vh; overflow:auto; border:1px solid #ddd; border-radius:6px; }
+    .mini-table { width:100%; border-collapse: collapse; background:#fff; }
+    .mini-table th, .mini-table td { border:1px solid #e5e7eb; padding:8px; font-size:13px; text-align:left; }
+    .mini-table th { background:#f3f4f6; color:#0f172a; }
+    .row-actions { display:flex; gap:6px; }
+    .tag { font-size:12px; padding:2px 6px; border-radius:999px; background:#eef2ff; color:#3730a3; }
+  .btn-mini.regreso {
+  background: #004a99;         /* azul institucional */
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  font-size: 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.btn-mini.regreso:hover {
+  background: #005cc8;         /* tono más claro al pasar el mouse */
+  filter: brightness(1.05);
+}
+
+  </style>
+</head>
+<body>
+
+  <div class="encabezado">
+    <img src="logounl.png" alt="Logo UNL" />
+    <div class="texto-centro">
+      <strong>UNIVERSIDAD NACIONAL DE LOJA</strong>
+      ÁREA DE LA ENERGÍA, LAS INDUSTRIAS Y LOS RECURSOS NATURALES NO RENOVABLES<br />
+      CARRERA: TELECOMUNICACIONES<br />
+      <div class="horario-titulo">Horario del Laboratorio de Telemática</div>
+    </div>
+    <img src="logocit.png" alt="Logo CIT" />
+  </div>
+
+<!-- Botón para regresar al portal -->
+<div style="text-align:left; margin-bottom:15px;">
+  <button id="btnRegresar" class="btn-mini regreso" onclick="window.location.href='portal.html'">
+    🔙 Regresar al portal
+  </button>
+</div>
+
+
+<div class="controls">
+  <label>Seleccionar semana:
+    <input type="text" id="semanaPicker" placeholder="Selecciona una semana" />
+  </label>
+
+  <div class="acciones">
+    <button class="btn-mini warn" onclick="abrirModalClases()">➕ Crear clases</button>
+    <button class="btn-mini neutral" onclick="abrirAdministradorClases()">📚 Ver clases creadas</button>
+    <button class="btn-mini" onclick="activarModoEdicion()">✏️ Editar horario</button>
+    <button class="btn-mini secondary" onclick="verUsoLibre()">🛠 Uso libre</button>
+    <button class="btn-mini" onclick="verHorarioExtra()">🗓 Horario extra</button>
+  </div>
+</div>
+
+
+  
+  <div id="bannerEdicion">
+    <strong>🟡 Modo edición activo:</strong> haz clic en una celda para crear/editar clases en el horario.
+    <button id="salirEdicion" class="btn-mini" onclick="desactivarModoEdicion()">Salir de edición</button>
+  </div>
+
+  <table id="tablaHorario">
+    <thead>
+      <tr>
+        <th>Hora</th>
+        <th>Lunes</th>
+        <th>Martes</th>
+        <th>Miércoles</th>
+        <th>Jueves</th>
+        <th>viernes</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- Modal para definir clase en el HORARIO (existente) -->
+  <div class="modal" id="modalHorario">
+    <div class="modal-content">
+      <h3>Definir clase</h3>
+      <div class="field">
+        <label for="inputCiclo">Ciclo</label>
+        <select id="inputCiclo">
+          <option value="">Selecciona ciclo...</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="inputAsignatura">Asignatura</label>
+        <select id="inputAsignatura">
+          <option value="">Selecciona asignatura...</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Docente</label>
+        <input id="inputProfesorAuto" type="text" disabled />
+      </div>
+
+      <div class="field">
+        <label for="inputDuracion">Duración</label>
+        <select id="inputDuracion">
+          <option value="1">Duración: 1 hora</option>
+          <option value="2">Duración: 2 horas</option>
+          <option value="3">Duración: 3 horas</option>
+          <option value="4">Duración: 4 horas</option>
+        </select>
+      </div>
+
+      <div class="modal-buttons">
+        <button onclick="guardarHorarioModal()">Guardar</button>
+        <button onclick="eliminarHorarioModal()">Eliminar</button>
+        <button onclick="cerrarModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para CREAR CLASES (predefinidas) (existente) -->
+  <div class="modal" id="modalClases">
+    <div class="modal-content">
+      <h3>Crear clases</h3>
+
+      <div class="field">
+        <label for="defCiclo">Ciclo</label>
+        <select id="defCiclo">
+          <option value="">Selecciona ciclo...</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="defAsignaturaInp">Asignatura</label>
+        <input id="defAsignaturaInp" type="text" list="dlAsignaturasAll" placeholder="Busca o escribe la asignatura" />
+        <datalist id="dlAsignaturasAll"></datalist>
+      </div>
+
+      <div class="field">
+        <label for="defProfesorInp">Docente</label>
+        <input id="defProfesorInp" type="text" list="dlDocentesAllCrear" placeholder="Busca o escribe el docente" />
+        <datalist id="dlDocentesAllCrear"></datalist>
+      </div>
+
+      <div class="modal-buttons">
+        <button onclick="guardarClasePredefinida()">Agregar</button>
+        <button onclick="cerrarModalClases()">Cerrar</button>
+      </div>
+      <div class="subtle" style="margin-top:6px;">Puedes registrar varias combinaciones para el mismo ciclo.</div>
+    </div>
+  </div>
+
+  <!-- NUEVO: Modal Administrador de Clases (listar/editar/eliminar) -->
+  <div class="modal modal-wide" id="modalAdminClases">
+    <div class="modal-content">
+      <h3>Clases creadas</h3>
+
+      <div class="toolbar">
+        <select id="filtroCiclo" onchange="filtrarAdminClases()">
+          <option value="">Todos los ciclos</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+        </select>
+        <input id="buscadorTexto" type="text" placeholder="Buscar por asignatura o docente..." oninput="filtrarAdminClases()" />
+        <span id="contadorClases" class="tag">0 clases</span>
+        <div style="margin-left:auto" class="row-actions">
+          <button class="btn-mini" onclick="recargarAdminClases()">↻ Recargar</button>
+          <button class="btn-mini" onclick="cerrarAdministradorClases()">Cerrar</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th style="width:80px;">Ciclo</th>
+              <th>Asignatura</th>
+              <th>Docente</th>
+              <th style="width:160px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyAdminClases"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- NUEVO: Modal de edición puntual -->
+  <div class="modal" id="modalEditarClase">
+    <div class="modal-content">
+      <h3>Editar clase</h3>
+      <input type="hidden" id="editDocId" />
+      <div class="field">
+        <label for="editCiclo">Ciclo</label>
+        <select id="editCiclo">
+          <option value="">Selecciona ciclo...</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option>
+        </select>
+      </div>
+      <div class="field">
+  <label for="editAsignatura">Asignatura</label>
+  <!-- Usa el mismo datalist que en "Crear clases" -->
+  <input id="editAsignatura" type="text" list="dlAsignaturasAll" placeholder="ASIGNATURA EN MAYÚSCULAS" />
+</div>
+<div class="field">
+  <label for="editProfesor">Docente</label>
+  <!-- Usa el mismo datalist que en "Crear clases" -->
+  <input id="editProfesor" type="text" list="dlDocentesAllCrear" placeholder="Ing. Nombre Apellido" />
+</div>
+
+      <div class="modal-buttons">
+        <button onclick="guardarEdicionClase()">Guardar cambios</button>
+        <button onclick="cerrarModalEditar()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------- Firebase ----------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+      authDomain: "escaner-qr-d7d65.firebaseapp.com",
+      projectId: "escaner-qr-d7d65",
+      storageBucket: "escaner-qr-d7d65.appspot.com",
+      messagingSenderId: "982923527298",
+      appId: "1:982923527298:web:df13850f38d847cfdae09b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // --------- Listas base (asignaturas/docentes) ---------
+    const ALL_ASIGNATURAS = [
+      "Matemática Discreta","Expresión Oral y Escrita","Cálculo de Una Variable","Física Básica","Álgebra Lineal",
+      "Fundamentos de Programación","Ecuaciones Diferenciales","Cálculo Multivariable","Interculturalidad","Física Aplicada",
+      "Probabilidad y Estadística","Circuitos Eléctricos","Electrónica Analógica y Digital","Ética Profesional","Teoría Electromagnética",
+      "Programación Aplicada","Señales y Sistemas","Procesos Estocásticos","Líneas de Transmisión","Comunicaciones Analógicas",
+      "Teoría de la Información","Sistemas Microprocesados","Innovación y Emprendimiento","Procesamiento Digital de Señales",
+      "Fundamentos de Redes de Datos","Electrónica de Alta Frecuencia","Comunicaciones Digitales","Ingeniería de Tráfico","Antenas",
+      "Comunicaciones Ópticas","Redes de Datos","Redes para el Desarrollo Comunitario","Sistemas Operativos",
+      "Fundamentos de Internet de las Cosas","Radiopropagación","Comunicaciones Unificadas","Ingeniería Económica",
+      "Metodología de la Investigación Científica","Comunicaciones Inalámbricas","Redes de Acceso","Internet de las Cosas",
+      "Proyecto de Titulación","Seguridad de Redes","Educación Ambiental","Marco Regulatorio de las Telecomunicaciones",
+      "Aplicaciones de Ciudades Inteligentes","Aplicaciones de Telecomunicaciones","Redes Celulares",
+      "Diseño, Administración y Gestión de Proyectos de Telecomunicaciones","Unidad de Integración Curricular"
+    ].map(s => s.toUpperCase());
+
+    const ALL_DOCENTES = [
+      "Ing. Luis Eduardo Rodriguez","Lic. Diana Gabriela Piñeiros","Ing. Marcelo Fernando Valdiviezo","Ing. Angel José Ordoñez","Ing. Franklin Gustavo Jimenez",
+      "Ing. Juan Carlos Solano","Ing. Christian Hernán Campoverde","Ing. Kleber Rolando Morillo","Ing. Renato Benjamín Torres","Ing. Diego Vinicio  Orellana",
+      "Ing. Paulo Alberto Samaniego","Ing. Juan Gabriel Ochoa","Ing. Marco Augusto Suing","Ing. John Jossimar Tucker","Ing. Marianela del Cisne Carrión",
+      "Ing. Andy Fabricio Vega","Ing. Santiago Abraham Medina","Ing. Alba Elizabeth Vargas","Ing. Rodolfo Pabel Merino"
+    ];
+
+    // -------------- Datos UI / estado --------------
+    const dias = ["lunes", "martes", "miercoles", "jueves", "viernes"];
+    const horas = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"];
+    const tbody = document.querySelector("#tablaHorario tbody");
+    let celdaActual = null;
+    let modoEdicion = false;
+    const horarioData = {};
+    let fechasSemana = {};
+    // Cache de clases predefinidas por ciclo: { "5":[{asignatura,profesor}, ...] }
+    const clasesPorCiclo = {};
+
+    // --------- Utilidades hora ----------
+    function horaAMinutos(h){ const [H,M]=h.split(":").map(Number); return H*60+M; }
+    function sumarHoras(hora, duracionHoras){ let m=horaAMinutos(hora)+duracionHoras*60; let H=Math.floor(m/60), M=m%60; return `${String(H).padStart(2,"0")}:${String(M).padStart(2,"0")}`; }
+    function convertirHoraANum(h){ const [H,M]=h.split(":").map(Number); return H+M/60; }
+    function sumarHorasSimple(hora, n){ let [H,M]=hora.split(":").map(Number); H+=n; if(H>=24) H-=24; return `${String(H).padStart(2,'0')}:${String(M).padStart(2,'0')}`; }
+
+    // --------- Semana / calendario ----------
+    const semanaPicker = flatpickr("#semanaPicker", {
+      locale: "es",
+      defaultDate: new Date(),
+      onChange: ([date]) => { calcularFechasSemana(date); cargarTabla(); }
+    });
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      const today = new Date();
+      calcularFechasSemana(today);
+      await cargarTabla();
+      semanaPicker.setDate(today);
+
+      // Precarga listas para los datalist (crear clases)
+      poblarDatalist("dlAsignaturasAll", ALL_ASIGNATURAS);
+      poblarDatalist("dlDocentesAllCrear", ALL_DOCENTES);
+
+      // Precarga de ciclos (cache)
+      ["1","2","3","4","5","6","7","8","9"].forEach(c => precargarClasesCiclo(c));
+    });
+
+    function poblarDatalist(id, arr){
+      const dl = document.getElementById(id);
+      dl.innerHTML = "";
+      arr.forEach(v => dl.insertAdjacentHTML("beforeend", `<option value="${v}"></option>`));
+    }
+
+    function calcularFechasSemana(date) {
+      const start = new Date(date);
+      const day = start.getDay();
+      const monday = new Date(start);
+      monday.setDate(start.getDate() - ((day + 6) % 7));
+      fechasSemana = {};
+      for (let i = 0; i < dias.length; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        fechasSemana[dias[i]] = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+      }
+    }
+
+    // --------- Tabla / render ----------
+    async function cargarTabla() {
+      tbody.innerHTML = "";
+      for (const k in horarioData) delete horarioData[k];
+
+      const snapshot = await db.collection("horario_laboratorio").get();
+      snapshot.forEach(doc => { horarioData[doc.id] = doc.data(); });
+
+      const celdasOcupadas = new Set();
+
+      horas.forEach((hora) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${hora} - ${String(parseInt(hora.split(':')[0]) + 1).padStart(2,'0')}:00</td>`;
+
+        dias.forEach((dia) => {
+          const celdaKey = `${dia}_${hora}`;
+          if (celdasOcupadas.has(celdaKey)) return;
+
+          let horarioEncontrado = null;
+          for (const key in horarioData) {
+            const h = horarioData[key];
+            if (h.dia !== dia) continue;
+
+            const inicioNum = convertirHoraANum(h.hora);
+            const finNum = convertirHoraANum(h.hora_fin);
+            const horaNum = convertirHoraANum(hora);
+
+            if (horaNum >= inicioNum && horaNum < finNum) {
+              horarioEncontrado = h;
+              break;
+            }
+          }
+
+          const td = document.createElement("td");
+          td.dataset.dia = dia;
+          td.dataset.hora = hora;
+
+          if (horarioEncontrado) {
+            const duracion = convertirHoraANum(horarioEncontrado.hora_fin) - convertirHoraANum(horarioEncontrado.hora);
+            for (let i = 0; i < duracion; i++) {
+              const hSig = sumarHorasSimple(horarioEncontrado.hora, i);
+              celdasOcupadas.add(`${dia}_${hSig}`);
+            }
+            td.rowSpan = duracion;
+            td.innerText = `${horarioEncontrado.asignatura}\n${horarioEncontrado.profesor}${horarioEncontrado.ciclo ? '\n' + horarioEncontrado.ciclo : ''}`;
+            td.dataset.guardado = "true";
+            td.classList.add("boton");
+            td.onclick = () => manejarClickCelda(td);
+          } else {
+            td.dataset.guardado = "false";
+            td.innerText = "";
+            td.onclick = () => manejarClickCelda(td);
+          }
+
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function manejarClickCelda(td) {
+      if (modoEdicion || td.dataset.guardado === "false") {
+        abrirModal(td);
+      } else {
+        const dia = td.dataset.dia;
+        const hora = td.dataset.hora;
+        const fecha = fechasSemana[dia];
+        if (fecha) window.open(`asistencia.html?dia=${dia}&hora=${hora}&fecha=${fecha}`, '_blank');
+        else alert("Selecciona primero una semana.");
+      }
+    }
+
+    // ========= MODAL HORARIO (crear/editar una celda) =========
+    async function abrirModal(td) {
+      celdaActual = td;
+      document.getElementById("modalHorario").style.display = "flex";
+
+      // Reset campos
+      document.getElementById("inputCiclo").value = "";
+      document.getElementById("inputAsignatura").innerHTML = `<option value="">Selecciona asignatura...</option>`;
+      document.getElementById("inputProfesorAuto").value = "";
+      document.getElementById("inputDuracion").value = "1";
+
+      // Prellenar si hay clase existente
+      const clase = obtenerClaseDesdeTabla(td) || {};
+
+      if (clase.ciclo) {
+        document.getElementById("inputCiclo").value = clase.ciclo;
+        await actualizarOpcionesAsignaturas(); // llena por ciclo
+        const selAsig = document.getElementById("inputAsignatura");
+        let found = false;
+        [...selAsig.options].forEach(op => { if (op.value === (clase.asignatura||"").toUpperCase()) { selAsig.value = op.value; found = true; }});
+        if (!found && clase.asignatura) {
+          selAsig.value = "OTRA_ASIGNATURA";
+          document.getElementById("inputProfesorAuto").value = clase.profesor || "";
+        } else {
+          await actualizarDocenteAuto();
+        }
+      }
+      document.getElementById("inputDuracion").value = String(clase.duracion || "1");
+    }
+
+    function obtenerClaseDesdeTabla(td) {
+      const dia = td.dataset.dia;
+      const hora = td.dataset.hora;
+      const prefijo = `${dia}_${hora}`;
+      for (const id in horarioData) {
+        if (id.startsWith(prefijo)) return horarioData[id];
+      }
+      return null;
+    }
+
+    async function guardarHorarioModal() {
+      const ciclo = document.getElementById("inputCiclo").value.trim();
+      const asigSel = document.getElementById("inputAsignatura").value;
+      const profesor = document.getElementById("inputProfesorAuto").value.trim();
+      const duracion = Number(document.getElementById("inputDuracion").value);
+
+      if (!ciclo) { alert("Selecciona el ciclo."); return; }
+      if (!asigSel) { alert("Selecciona la asignatura."); return; }
+      if (asigSel === "OTRA_ASIGNATURA") { alert("Primero registra la clase en 'Crear clases' para ese ciclo."); return; }
+      if (!profesor) { alert("No hay docente asociado a la asignatura en este ciclo. Registra la clase en 'Crear clases'."); return; }
+      if (duracion < 1 || duracion > 4) { alert("Duración inválida."); return; }
+
+      const dia = celdaActual.dataset.dia;
+      const horaInicio = celdaActual.dataset.hora;
+      const horaFin = sumarHoras(horaInicio, duracion);
+
+      await db.collection("horario_laboratorio").doc(`${dia}_${horaInicio}_${horaFin}`).set({
+        dia,
+        hora: horaInicio,
+        hora_fin: horaFin,
+        duracion,
+        asignatura: asigSel.toUpperCase(),
+        profesor,
+        ciclo
+      });
+
+      document.getElementById("modalHorario").style.display = "none";
+      cargarTabla();
+    }
+
+    async function eliminarHorarioModal() {
+      if (!celdaActual) return;
+      const dia = celdaActual.dataset.dia;
+      const hora = celdaActual.dataset.hora;
+      const prefijo = `${dia}_${hora}`;
+      const snapshot = await db.collection("horario_laboratorio").get();
+      let docIdAEliminar = null;
+      snapshot.forEach(doc => { if (doc.id.startsWith(prefijo)) docIdAEliminar = doc.id; });
+      if (docIdAEliminar) {
+        if (confirm("¿Eliminar esta clase del horario?")) {
+          await db.collection("horario_laboratorio").doc(docIdAEliminar).delete();
+        }
+      }
+      document.getElementById("modalHorario").style.display = "none";
+      cargarTabla();
+    }
+
+    function cerrarModal() { document.getElementById("modalHorario").style.display = "none"; }
+
+    function activarModoEdicion() {
+      modoEdicion = true;
+      document.getElementById("bannerEdicion").style.display = "block";
+      alert("Modo edición activado. Haz clic en una celda para crear/editar.");
+    }
+    function desactivarModoEdicion() {
+      modoEdicion = false;
+      document.getElementById("bannerEdicion").style.display = "none";
+    }
+    function verUsoLibre() { window.open("uso_libre.html", '_blank'); }
+    function verHorarioExtra() { window.open("horaextra.html", "_blank"); }
+
+    // ---------- Clases predefinidas (existente) ----------
+    function abrirModalClases() { document.getElementById("modalClases").style.display = "flex"; }
+    function cerrarModalClases() { document.getElementById("modalClases").style.display = "none"; }
+
+    async function guardarClasePredefinida() {
+      const ciclo = document.getElementById("defCiclo").value.trim();
+      let asignatura = (document.getElementById("defAsignaturaInp").value || "").trim().toUpperCase();
+      const profesor = (document.getElementById("defProfesorInp").value || "").trim();
+
+      if (!ciclo || !asignatura || !profesor) { alert("Completa ciclo, asignatura y docente."); return; }
+
+      await db.collection("clases_definidas").add({ ciclo, asignatura, profesor });
+
+      // Actualiza cache local
+      if (!clasesPorCiclo[ciclo]) clasesPorCiclo[ciclo] = [];
+      clasesPorCiclo[ciclo].push({ asignatura, profesor });
+
+      // Limpiar inputs
+      document.getElementById("defAsignaturaInp").value = "";
+      document.getElementById("defProfesorInp").value = "";
+      alert("Clase agregada.");
+    }
+
+    async function precargarClasesCiclo(ciclo) {
+      if (clasesPorCiclo[ciclo]) return;
+      const arr = [];
+      const snap = await db.collection("clases_definidas").where("ciclo","==",ciclo).get();
+      snap.forEach(d => {
+        const data = d.data();
+        arr.push({ asignatura: (data.asignatura||"").toUpperCase(), profesor: data.profesor||"" });
+      });
+      clasesPorCiclo[ciclo] = arr;
+    }
+
+    async function actualizarOpcionesAsignaturas() {
+      const ciclo = document.getElementById("inputCiclo").value.trim();
+      const sel = document.getElementById("inputAsignatura");
+      sel.innerHTML = `<option value="">Selecciona asignatura...</option>`;
+      document.getElementById("inputProfesorAuto").value = "";
+
+      if (!ciclo) return;
+
+      await precargarClasesCiclo(ciclo);
+      const lista = clasesPorCiclo[ciclo] || [];
+
+      const setAsig = new Set();
+      lista.forEach(it => { if (it.asignatura) setAsig.add(it.asignatura.toUpperCase()); });
+
+      [...setAsig].sort().forEach(asig => {
+        sel.insertAdjacentHTML("beforeend", `<option value="${asig}">${asig}</option>`);
+      });
+
+      sel.insertAdjacentHTML("beforeend", `<option value="OTRA_ASIGNATURA">OTRA ASIGNATURA…</option>`);
+    }
+
+    async function actualizarDocenteAuto() {
+      const ciclo = document.getElementById("inputCiclo").value.trim();
+      const asig = document.getElementById("inputAsignatura").value;
+      const out = document.getElementById("inputProfesorAuto");
+      out.value = "";
+
+      if (!ciclo || !asig || asig === "OTRA_ASIGNATURA") return;
+
+      await precargarClasesCiclo(ciclo);
+      const lista = clasesPorCiclo[ciclo] || [];
+      const found = lista.find(it => (it.asignatura||"").toUpperCase() === asig.toUpperCase());
+      if (found) out.value = found.profesor || "";
+    }
+
+    document.getElementById("inputCiclo").addEventListener("change", actualizarOpcionesAsignaturas);
+    document.getElementById("inputAsignatura").addEventListener("change", actualizarDocenteAuto);
+
+    // =========================================================
+    // ============= NUEVO: ADMINISTRADOR DE CLASES ============
+    // =========================================================
+    let cacheAdmin = []; // [{id, ciclo, asignatura, profesor}, ...]
+
+    function abrirAdministradorClases() {
+      document.getElementById("modalAdminClases").style.display = "flex";
+      cargarAdminClases();
+    }
+    function cerrarAdministradorClases() {
+      document.getElementById("modalAdminClases").style.display = "none";
+    }
+    async function recargarAdminClases() {
+      await cargarAdminClases(true);
+    }
+
+    async function cargarAdminClases(force=false) {
+      // Obtener todo de Firestore (no dependemos del cache por ciclo aquí)
+      const snap = await db.collection("clases_definidas").get();
+      cacheAdmin = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        cacheAdmin.push({
+          id: doc.id,
+          ciclo: d.ciclo || "",
+          asignatura: (d.asignatura || "").toString().toUpperCase(),
+          profesor: d.profesor || ""
+        });
+      });
+      renderAdminClases();
+    }
+
+    function renderAdminClases() {
+      const tb = document.getElementById("tbodyAdminClases");
+      tb.innerHTML = "";
+      const fCiclo = (document.getElementById("filtroCiclo").value || "").trim();
+      const q = (document.getElementById("buscadorTexto").value || "").trim().toUpperCase();
+
+      let list = cacheAdmin.slice().sort((a,b) => (a.ciclo||"").localeCompare(b.ciclo||"") || a.asignatura.localeCompare(b.asignatura));
+      if (fCiclo) list = list.filter(x => (x.ciclo||"") === fCiclo);
+      if (q) list = list.filter(x => x.asignatura.includes(q) || x.profesor.toUpperCase().includes(q));
+
+      list.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><span class="tag">${item.ciclo || "-"}</span></td>
+          <td>${item.asignatura}</td>
+          <td>${item.profesor || "-"}</td>
+          <td>
+            <div class="row-actions">
+              <button class="btn-mini" onclick="abrirModalEditar('${item.id}')">Editar</button>
+              <button class="btn-mini warn" onclick="eliminarClaseAdmin('${item.id}')">Eliminar</button>
+            </div>
+          </td>
+        `;
+        tb.appendChild(tr);
+      });
+
+      document.getElementById("contadorClases").textContent = `${list.length} clases`;
+    }
+
+    function filtrarAdminClases() { renderAdminClases(); }
+
+    function abrirModalEditar(id) {
+      const it = cacheAdmin.find(x => x.id === id);
+      if (!it) return;
+      document.getElementById("editDocId").value = it.id;
+      document.getElementById("editCiclo").value = it.ciclo || "";
+      document.getElementById("editAsignatura").value = it.asignatura || "";
+      document.getElementById("editProfesor").value = it.profesor || "";
+      document.getElementById("modalEditarClase").style.display = "flex";
+    }
+    function cerrarModalEditar() {
+      document.getElementById("modalEditarClase").style.display = "none";
+    }
+
+    async function guardarEdicionClase() {
+      const id = document.getElementById("editDocId").value;
+      const ciclo = (document.getElementById("editCiclo").value || "").trim();
+      const asignatura = (document.getElementById("editAsignatura").value || "").trim().toUpperCase();
+      const profesor = (document.getElementById("editProfesor").value || "").trim();
+
+      if (!id) return;
+      if (!ciclo || !asignatura || !profesor) { alert("Completa ciclo, asignatura y docente."); return; }
+
+      // Confirmación
+      if (!confirm("¿Guardar cambios en esta clase?")) return;
+
+      await db.collection("clases_definidas").doc(id).update({ ciclo, asignatura, profesor });
+
+      // Actualizar cache admin
+      const idx = cacheAdmin.findIndex(x => x.id === id);
+      if (idx >= 0) cacheAdmin[idx] = { id, ciclo, asignatura, profesor };
+
+      // Refrescar cache por ciclo usado por el horario (invalida y recarga)
+      await refrescarCacheCiclo(ciclo);
+
+      cerrarModalEditar();
+      renderAdminClases();
+      alert("Cambios guardados.");
+    }
+
+    async function eliminarClaseAdmin(id) {
+      const it = cacheAdmin.find(x => x.id === id);
+      if (!it) return;
+      if (!confirm(`¿Eliminar la clase "${it.asignatura}" del ciclo ${it.ciclo}?`)) return;
+
+      await db.collection("clases_definidas").doc(id).delete();
+
+      // Quitar de cache admin
+      cacheAdmin = cacheAdmin.filter(x => x.id !== id);
+      renderAdminClases();
+
+      // Refrescar cache por ciclo usado por el horario
+      await refrescarCacheCiclo(it.ciclo);
+
+      alert("Clase eliminada.");
+    }
+
+    async function refrescarCacheCiclo(ciclo) {
+      // Fuerza recarga de ese ciclo para que el selector de asignaturas se actualice
+      delete clasesPorCiclo[ciclo];
+      await precargarClasesCiclo(ciclo);
+      // Si el modal horario está abierto y coincide el ciclo seleccionado, vuelve a poblar asignaturas
+      const modalVisible = document.getElementById("modalHorario").style.display === "flex";
+      if (modalVisible && document.getElementById("inputCiclo").value.trim() === ciclo) {
+        await actualizarOpcionesAsignaturas();
+      }
+    }
+    // ================== FIN ADMINISTRADOR ====================
+  </script>
+</body>
+</html>

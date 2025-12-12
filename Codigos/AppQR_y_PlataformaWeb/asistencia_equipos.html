@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Registro de Laboratorio - Universidad Nacional de Loja</title>
+<style>
+  *{box-sizing:border-box}
+  body{
+    font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;margin:30px auto;max-width:900px;background:#f9f9f9;
+    color:#333;
+  display: none;
+  }
+
+  .encabezado{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:5px;border-bottom:2px solid #ccc}
+  .encabezado img{height:55px}
+  .encabezado .texto-centro{flex:1;text-align:center;font-size:.9rem;line-height:1.2;color:#222}
+  .encabezado .texto-centro strong{font-size:1.2rem;display:block;color:#004a99;margin-bottom:.15em}
+  .encabezado .texto-centro .subtitulo{font-weight:600;font-size:.85rem;margin-bottom:.1em}
+
+  .container{background:#fff;padding:25px 30px;border-radius:10px;box-shadow:0 0 15px rgba(0,0,0,.1)}
+  h1{color:#004a99;font-weight:700;font-size:1.6rem;text-align:center;margin-bottom:.6em}
+
+  table{width:100%;border-collapse:collapse;margin:22px 0 10px}
+  thead{background:#004a99;color:#fff}
+  th,td{border:1px solid #ccc;padding:8px 10px;text-align:center;font-size:.9rem}
+  tbody tr:nth-child(even){background:#f3f8ff}
+  tbody tr.marcado { background:#fff7e6 !important; }
+  tbody tr.marcado td { border-color:#f5d5a5; }
+
+  .observaciones-section{display:flex;gap:25px;margin-top:20px}
+  .observaciones{flex:2;border:1px solid #e5e7eb;border-radius:8px;min-height:110px;padding:12px;font-size:.95rem;background:#fff}
+  .observaciones::before{
+    content:"OBSERVACIONES";
+    display:block;
+    font-weight:700;
+    color:#444;
+    margin-bottom:6px;
+    letter-spacing:.3px;
+  }
+  .observaciones{ padding:14px 12px; }
+
+  .firma{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    text-align:center;
+    font-weight:600;
+    font-size:1.05rem;
+    margin-top:80px;
+    padding-top:8px;
+  }
+  .firma::before{
+    content:"";
+    width:100%;
+    border-top:2px solid #004a99;
+    margin-bottom:6px;
+  }
+
+  .botones{text-align:center;margin-bottom:30px}
+  button{background:#004a99;color:#fff;border:none;padding:12px 25px;margin:0 10px;border-radius:5px;cursor:pointer;font-size:1rem;transition:.3s}
+  button:hover{background:#003366}
+  button:disabled{background:#7a7a7a;cursor:not-allowed}
+
+  tbody tr.modo-accion:hover { outline:2px dashed #475569; cursor:pointer; }
+  .tools { display:flex; gap:8px; justify-content:center; margin:10px 0 6px; flex-wrap:wrap; }
+  .btn-mini{ padding:8px 12px; font-size:.9rem; border-radius:8px; }
+  .btn-ghost{ background:#eef2ff; color:#1e40af; }
+  .btn-ghost:hover{ background:#e0e7ff; }
+  .btn-danger{ background:#ef4444; }
+  .btn-danger:hover{ background:#dc2626; }
+  .btn-active { box-shadow:0 0 0 3px rgba(37,99,235,.25) inset; }
+
+  .estado-modo { display:flex; justify-content:center; margin-bottom:18px; }
+  .pill { font-weight:600; padding:6px 12px; border-radius:999px; font-size:.9rem; }
+  .pill-none { background:#e5e7eb; color:#374151; }
+  .pill-marcar { background:#fde68a; color:#92400e; }
+  .pill-eliminar { background:#fecaca; color:#7f1d1d; }
+  .pill-editar { background:#c7d2fe; color:#3730a3; }
+
+/* === CONFIGURACIÓN DE IMPRESIÓN === */
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  html, body {
+    background: #fff;
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body { 
+    padding-top: 15mm;
+  }
+
+  .botones, .tools, .modal, .estado-modo { display: none !important; }
+
+  /* Compactar contenedor */
+  .container { box-shadow: none; border: none; padding: 6mm 6mm 4mm; }
+
+  /* Texto y encabezado */
+  .encabezado { margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid #bbb; }
+  .encabezado img { height: 38px; }
+  .encabezado .texto-centro { font-size: .7rem; line-height: 1.1; }
+  .encabezado .texto-centro strong { font-size: .95rem; }
+
+  h1 { font-size: 1rem; margin: 6px 0 8px; }
+  .header-info { gap: 6px 12px; font-size: .74rem; }
+  .value, .field-input, .field-select, .field-textarea { font-size: .74rem; line-height: 1.15; }
+
+  /* Tabla */
+  table { margin: 8px 0 6px; }
+  thead { background: #004a99; color: #fff; display: table-header-group; }
+  th, td {
+   padding: 3px 6px; /* más compacto */
+  font-size: 9px; /* más pequeño */
+    line-height: 1.2;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  tbody tr:nth-child(even) { background: #eef5ff !important; }
+
+  /* Mantener filas juntas */
+  tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+  tfoot { display: table-footer-group; }
+
+  /* Insertaremos clase PB para salto de página */
+  #tablaAsistencia tbody tr.pb {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* Observaciones y firma compactas */
+  .observaciones-section { gap: 12px; }
+  .observaciones { min-height: 54px; font-size: .74rem; padding: 7px; }
+  .observaciones::before { font-size: .78rem; margin-bottom: 4px; }
+  .firma { margin-top: 24px; font-size: .88rem; }
+  .firma::before { border-top-width: 1px; }
+
+  #tablaLaboratorio tbody tr.pb {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* === Logos más pequeños === */
+  .tabla-con-fondo::before {
+    background-image: url("img/logounl2.png");
+    width: 200px;      /* reducido */
+    height: 200px;     /* reducido */
+    left: 50%;
+    top: 40%;
+    transform: translate(-50%, -50%);
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0.03;     /* más tenue */
+    position: absolute;
+    content: "";
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .tabla-con-fondo::after {
+    background-image: url("img/logounl3.png");
+    width: 150px;      /* reducido */
+    height: 150px;     /* reducido */
+    left: 50%;
+    top: 82%;
+    transform: translate(-50%, -50%);
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0.03;     /* más tenue */
+    position: absolute;
+    content: "";
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .tabla-con-fondo table {
+    position: relative;
+    z-index: 1;
+    background: transparent;
+  }
+
+  tbody tr {
+    background-color: transparent;
+  }
+
+}
+
+
+.tabla-con-fondo {
+  position: relative; /* necesario para que los pseudo-elementos se posicionen respecto a la tabla */
+}
+
+.tabla-con-fondo::before,
+.tabla-con-fondo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;
+  pointer-events: none;
+  opacity: 0.06; /* ajusta según quieras que se vea más o menos */
+  z-index: 0; /* detrás de la tabla */
+}
+
+.tabla-con-fondo::before {
+  background-image: url("img/logounl2.png");
+  width: 400px;
+  height: 400px;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+}
+
+.tabla-con-fondo::after {
+  background-image: url("img/logounl3.png");
+  width: 300px;
+  height: 200px;
+  left: 50%;
+  top: 90%;
+  transform: translate(-50%, -50%);
+}
+
+/* Asegurarse que la tabla quede encima de las marcas de agua */
+.tabla-con-fondo table {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+tbody tr {
+  background-color: transparent; /* filas transparentes para que se vea la marca */
+}
+
+
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script> </head>
+</head>
+<body>
+
+<div class="encabezado">
+  <img src="logounl.png" alt="Logo UNL" />
+  <div class="texto-centro">
+    <strong>UNIVERSIDAD NACIONAL DE LOJA</strong>
+    <div class="subtitulo">Área de la Energía, las Industrias y los Recursos Naturales No Renovables</div>
+    <div class="subtitulo">Carrera: Telecomunicaciones</div>
+    <div class="subtitulo">Registro de Laboratorio</div>
+    <div class="subtitulo">Laboratorio de Telemática</div>
+
+  </div>
+  <img src="logocit.png" alt="Logo CIT" />
+</div>
+
+<div class="container">
+  <h1>Registro de Laboratorio</h1>
+
+ <div class="header-info">
+  <label style="font-weight:700;">Docente Encargado:</label><div id="docente" class="value">Ing. Miguel González</div>
+  <label style="font-weight:700;">Fecha:</label><div id="fecha" class="value">2025-10-28</div>
+  <label style="font-weight:700;">Período lectivo:</label><div id="periodo" class="value">SEP 2025 - FEB 2026</div>
+  <label style="font-weight:700;">Práctica / Tema:</label><div id="tema" class="value" contenteditable="true">-</div>
+</div>
+
+
+<table id="tablaLaboratorio" class="tabla-con-fondo">
+  <thead>
+    <tr>
+      <th>N°</th>
+      <th>Alumno</th>
+      <th>Cédula</th>
+      <th>Equipo</th>
+      <th>codigo</th>
+      <th>Reserva</th>
+      <th>Asistencia</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+
+ 
+
+  
+
+  <div class="observaciones-section">
+<div id="observaciones" class="observaciones" contenteditable="true"></div>
+    <div class="firma">FIRMA</div>
+  </div>
+
+  <div class="botones">
+        <button onclick="guardarCambios()">Guardar cambios</button>
+    <button onclick="descargarPDF()">Descargar PDF</button>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey:"AIzaSyBByttCwTn1hMwo9X5P2gbsYlSq9lGa7t0",
+    authDomain:"escaner-qr-d7d65.firebaseapp.com",
+    projectId:"escaner-qr-d7d65",
+    storageBucket:"escaner-qr-d7d65.appspot.com",
+    messagingSenderId:"982923527298",
+    appId:"1:982923527298:web:df13850f38d847cfdae09b"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  const tbody = document.querySelector("#tablaLaboratorio tbody");
+  const temaEl = document.getElementById("tema");
+const obsEl = document.getElementById("observaciones");
+
+
+
+function inicializarRegistro() {
+    cargarLaboratorio();
+    window.addEventListener('beforeprint', () => applyPageBreaks(30));
+    applyPageBreaks(30);
+}
+
+
+  
+// --- 🔹 LEER PARÁMETRO DE FECHA (YYYY-MM-DD) ---
+const params = new URLSearchParams(window.location.search);
+const fechaURL = params.get("fecha");
+
+const fechaEl = document.getElementById("fecha");
+let fechaISO;
+
+// Si viene una fecha en la URL, la usamos
+if (fechaURL) {
+  fechaISO = fechaURL;
+} else {
+  const hoy = new Date();
+  fechaISO = hoy.toISOString().split("T")[0]; // "2025-10-28"
+}
+
+// Mostrar fecha en formato DD/MM/YYYY para el usuario
+const partes = fechaISO.split("-");
+const fechaVisual = `${partes[2]}/${partes[1]}/${partes[0]}`;
+fechaEl.textContent = fechaVisual;
+
+// Guardamos la fecha real para la lógica
+fechaEl.dataset.iso = fechaISO;
+
+
+
+
+const periodoEl = document.getElementById("periodo");
+
+// Función para calcular el periodo lectivo por defecto según la fecha
+function periodoPorDefectoHoy() {
+    const hoy = new Date(fechaISO); // usamos la fecha que ya definimos
+    const m = hoy.getMonth(); // 0 = enero, 1 = febrero...
+    const y = hoy.getFullYear();
+    if (m >= 2 && m <= 7) return `Marzo ${y} - Agosto ${y}`;
+    else if (m >= 8) return `SEP ${y} - FEB ${y+1}`;
+    else return `SEP ${y-1} - FEB ${y}`;
+}
+
+// Asignar el periodo al elemento
+periodoEl.textContent = periodoPorDefectoHoy();
+
+
+async function cargarLaboratorio() {
+  tbody.innerHTML = "";
+
+  const snapshot = await db.collection("uso_libre")
+    .where("fecha", "==", fechaEl.dataset.iso)
+    .get();
+
+  if (snapshot.empty) {
+    // Si no hay registros, creamos 30 filas vacías
+    for (let i = 1; i <= 30; i++) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${i}</td>
+        <td>-</td>
+        <td>-</td>
+        <td>-</td>
+        <td>-</td>
+        <td>-</td>
+        <td>-</td>
+      `;
+      tbody.appendChild(tr);
+    }
+    return;
+  }
+
+  let i = 1;
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    temaEl.textContent = data.tema || "-";
+    obsEl.textContent = data.observaciones || "";
+
+    const equipo = data.equipo_nombre || `${data.equipo_marca || ''} ${data.equipo_modelo || ''}`;
+    const reserva = data.reserva_hora_inicio && data.reserva_hora_fin
+      ? `${data.reserva_hora_inicio}-${data.reserva_hora_fin} h`
+      : "-";
+    const asistencia = data.hora || "-";
+
+    const tr = document.createElement("tr");
+    tr.dataset.id = doc.id;
+    tr.dataset.cedula = data.cedula || "";
+
+    tr.innerHTML = `
+      <td>${i++}</td>
+      <td>${data.nombre || ''}</td>
+      <td>${data.cedula || ''}</td>
+      <td>${data.equipo_nombre||''}</td>
+      <td>${data.equipo_codigo||''}</td>
+      <td>${reserva}</td>
+      <td>${asistencia}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  // Completar hasta 30 filas si hay menos de 30
+  for (; i <= 30; i++) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i}</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function applyPageBreaks(limit = 30) {
+  const rows = document.querySelectorAll('#tablaLaboratorio tbody tr');
+  rows.forEach(tr => tr.classList.remove('pb'));
+  for (let i = limit; i < rows.length; i += limit) {
+    rows[i].classList.add('pb');
+  }
+}
+
+// Inserta salto de página antes de la fila 41, 81, 121... (40 por página)
+function applyPageBreaks(limit = 30){
+  const rows = document.querySelectorAll('#tablaLaboratorio tbody tr');
+  rows.forEach(tr => tr.classList.remove('pb'));
+  for (let i = limit; i < rows.length; i += limit) {
+    rows[i].classList.add('pb');
+  }
+}
+async function guardarCambios() {
+  const tema = temaEl.textContent.trim();
+  const observaciones = obsEl.textContent.trim();
+
+  const snapshot = await db.collection("uso_libre")
+    .where("fecha", "==", fechaEl.dataset.iso)
+    .get();
+
+  snapshot.forEach(doc => {
+    db.collection("uso_libre").doc(doc.id).update({
+      tema,
+      observaciones
+    });
+  });
+
+  alert("Cambios guardados correctamente.");
+}
+
+function descargarPDF(){
+  // Asegura cortes antes de imprimir
+  applyPageBreaks(30);
+
+  // Tomar la fecha
+  const fecha = document.getElementById("fecha")?.textContent?.trim() || "sin_fecha";
+  const asignatura = document.getElementById("asignatura")?.textContent?.trim() || "Laboratorio";
+  
+  // Crear nombre sugerido del archivo
+  const nombreArchivo = `Registro_Laboratorio_${fecha}_${asignatura.replace(/\s+/g,'_')}`;
+  
+  const oldTitle = document.title;
+  document.title = nombreArchivo;
+
+  const restore = () => {
+    document.title = oldTitle;
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+
+  window.print(); // Abre diálogo de impresión o guardado PDF
+}
+
+  // ... (Desplázate hasta el final de tu script, después de todas tus funciones)
+
+// Es necesario inicializar Auth aquí
+const auth = firebase.auth();
+
+// ----------------------------------------------------
+// 🔑 BLOQUE DE SEGURIDAD: AUTENTICACIÓN Y AUTORIZACIÓN
+// ----------------------------------------------------
+auth.onAuthStateChanged(async (user) => {
+    
+    // 1. Si NO hay usuario logueado, redirigir al login
+    if (!user) {
+        window.location.href = "login.html"; // Asegúrate de que esta URL sea correcta
+        return;
+    }
+
+    // 2. Usuario logueado: Verificar si su UID existe en la colección 'supervisores'
+    try {
+        const userUid = user.uid;
+        
+        const supervisorDoc = await db.collection("supervisores").doc(userUid).get();
+
+        if (supervisorDoc.exists) {
+            // 🔑 ACCESO CONCEDIDO
+            document.body.style.display = 'block'; // 🟢 Mostrar la página
+            
+            // 📞 LLAMAR a la función que inicia toda la lógica de la página
+            inicializarRegistro(); // ⬅️ Llama a tu función
+            
+        } else {
+            // Acceso denegado: Logueado, pero no es supervisor
+            alert("Acceso denegado. No tienes permisos de supervisor.");
+            auth.signOut(); 
+            window.location.href = "login.html";
+        }
+
+    } catch (error) {
+        console.error("Error verificando supervisor:", error);
+        alert("Ocurrió un error en la verificación de seguridad.");
+        auth.signOut();
+        window.location.href = "login.html";
+    }
+});
+
+
+</script>
+</body>
+</html>
